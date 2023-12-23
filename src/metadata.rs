@@ -25,14 +25,14 @@ pub struct InodeInfo {
 	pub path: OsString,
 	pub attr: FileAttr,
   pub offset: u64,
-  pub size: u64,
+  pub size: Option<u64>,
 	/// Last update timestamp
 	timestamp: SystemTime
 }
 
 impl InodeInfo {
-	pub fn new(path: impl AsRef<Path>, ino: u64, offset: u64, size: u64) -> io::Result<Self> {
-		let attr = InodeInfo::get_metadata(path.as_ref(), ino, size)?;
+	pub fn new(path: impl AsRef<Path>, ino: u64, offset: u64, size: Option<u64>) -> io::Result<Self> {
+		let attr = InodeInfo::get_metadata(path.as_ref(), ino, offset, size)?;
 		Ok(Self {
 			path: path.as_ref().as_os_str().to_os_string(),
       ino,
@@ -59,16 +59,16 @@ impl InodeInfo {
 
 	pub fn update_info(&mut self, timeout: Duration) -> io::Result<()> {
 		if self.outdated(SystemTime::now(), timeout) {
-			let attr = InodeInfo::get_metadata(&self.path, self.ino, self.size)?;
+			let attr = InodeInfo::get_metadata(&self.path, self.ino, self.offset, self.size)?;
 			self.attr = attr;
 			self.timestamp = SystemTime::now();
 		}
 		Ok(())
 	}
 
-	fn get_metadata(path: impl AsRef<Path>, ino: u64, size: u64) -> io::Result<FileAttr> {
+	fn get_metadata(path: impl AsRef<Path>, ino: u64, offset: u64, size: Option<u64>) -> io::Result<FileAttr> {
 		let src_metadata = fs::metadata(&path)?;
-		let attr = derive_attr(&src_metadata,	ino, size);
+		let attr = derive_attr(&src_metadata,	ino, offset, size);
 		Ok(attr)
 	}
 }
@@ -77,7 +77,7 @@ impl InodeInfo {
 pub const ROOT_INODE: u64 = 1;
 
 // Derive attr from metadata of existing file
-pub fn derive_attr(src_metadata: &fs::Metadata, ino: u64, size: u64) -> FileAttr {
+pub fn derive_attr(src_metadata: &fs::Metadata, ino: u64, offset: u64, size: Option<u64>) -> FileAttr {
 	let cur_time = SystemTime::now();
 	// permission bits (excluding the format bits)
 	let mut perm = src_metadata.mode() & !S_IFMT;
@@ -85,6 +85,7 @@ pub fn derive_attr(src_metadata: &fs::Metadata, ino: u64, size: u64) -> FileAttr
 		// remove executable bit
 		perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
 	}
+  let size = size.unwrap_or(src_metadata.size().saturating_sub(offset));
 
 	FileAttr {
 		ino,

@@ -32,11 +32,11 @@ struct Args {
   #[arg(short, long)]
   name: Vec<PathBuf>,
 
-  /// Custom offset from start for each block file
+  /// Custom offset from start for each block file (range default to start of file)
   #[arg(short, long)]
   offset: Vec<u64>,
 
-  /// Custom size for each block file
+  /// Custom size for each block file (range default to end of file)
   #[arg(short, long)]
   size: Vec<u64>,
 
@@ -59,7 +59,7 @@ struct Args {
 
   /// Run in foreground
   #[arg(long)]
-  fg: bool,
+  foreground: bool,
 
   /// Mount point
   mount_point: PathBuf

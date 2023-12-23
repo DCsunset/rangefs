@@ -61,8 +61,7 @@ impl RangeFs {
       paths,
       // default offset is 0
       offsets.iter().cloned().chain(iter::repeat(0)),
-      // default size is 0
-      sizes.iter().cloned().chain(iter::repeat(0)),
+      sizes.iter().map(|s| Some(s.clone())).chain(iter::repeat(None)),
       names.iter().map(|n| Some(n)).chain(iter::repeat(None))
     ) {
       // use original device name as default name if not specified
@@ -71,7 +70,7 @@ impl RangeFs {
         Some(name) => name.as_os_str().to_os_string(),
         None => {
           path.as_path().file_name()
-            .expect(&format!("invalid source: {:?}", path))
+            .expect(&format!("invalid source file: {:?}", path))
             .to_os_string()
         }
       };
@@ -229,9 +228,9 @@ impl Filesystem for RangeFs {
     assert!(offset >= 0);
     match self.inode_map.get(&ino) {
       Some(info) => {
-        let off = info.offset + offset as u64;
-        let s = cmp::min(info.size.saturating_sub(offset as u64), size as u64);
-        match read_at(&info.path, off, s as usize) {
+        let o = info.offset + offset as u64;
+        let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
+        match read_at(&info.path, o, s as usize) {
           Ok(data) => {
             reply.data(&data);
           },
