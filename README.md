@@ -22,6 +22,11 @@ To mount files with range to a mount point:
 ```sh
 # mount
 rangefs --file file1 --offset 0 --size 8 <mount_point>
+# multiple files
+rangefs -f file1 -o 1 -f file2 -o 2 <mount_point>
+# rename mounted files
+rangefs -f file1 -o 1 -n f1 -f file1 -o 2 -n f2 <mount_point>
+
 # unmount
 fusermount -u <mount_point>
 ```
@@ -35,8 +40,11 @@ If the program exits without using `fusermount`,
 `fusermoutn` still needs to be used even after the program exits.
 You can also use `-a` option to auto unmount the fs upon program exit.
 
-See available options using `rangefs --help`.
+Note that =rangefs= also supports block special file.
+However, you need to speicify the size of the range.
+Otherwise, the default size will be 0 (same as that in the block file metadata).
 
+See available options using `rangefs --help`.
 
 ## License
 

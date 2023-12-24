@@ -24,19 +24,19 @@ use rangefs::RangeFs;
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-  /// The source block files to mount
+  /// Source files to map range from
   #[arg(short, long)]
   file: Vec<PathBuf>,
 
-  /// Custom name for each block file
+  /// Custom name for mounted file
   #[arg(short, long)]
   name: Vec<PathBuf>,
 
-  /// Custom offset from start for each block file (range default to start of file)
+  /// Start of the range in file (default to start of file)
   #[arg(short, long)]
   offset: Vec<u64>,
 
-  /// Custom size for each block file (range default to end of file)
+  /// Size of for range in file (range default to end of file)
   #[arg(short, long)]
   size: Vec<u64>,
 
@@ -48,14 +48,14 @@ struct Args {
   #[arg(long)]
   allow_root: bool,
 
-  /// Timeout for metadata and cache in seconds
-  #[arg(short, long, default_value_t = 1)]
-  timeout: u64,
-
   /// Unmount automatically when program exists.
   /// (need --allow-root or --allow-other; auto set one if not specified)
   #[arg(short, long)]
   auto_unmount: bool,
+
+  /// Timeout for metadata and cache in seconds
+  #[arg(short, long, default_value_t = 1)]
+  timeout: u64,
 
   /// Run in foreground
   #[arg(long)]
