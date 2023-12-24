@@ -245,8 +245,10 @@ impl Filesystem for RangeFs {
   }
 
   fn statfs(&mut self, _req: &Request<'_>, _ino: u64, reply: fuser::ReplyStatfs) {
+    // Sum up all the blocks
+    let blocks: u64 = self.inode_map.values().map(|v| v.attr.blocks).sum();
     // convert to c-style string without encoding/decoding
-    reply.statfs(0, 0, 0, self.inode_map.len() as u64, 0, 512, 255, 512);
+    reply.statfs(blocks, 0, 0, self.inode_map.len() as u64, 0, 512, 255, 512);
   }
 }
 
