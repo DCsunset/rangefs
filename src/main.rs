@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use fuser::{self, MountOption};
 use rangefs::RangeFs;
+use daemonize::Daemonize;
 
 #[derive(Parser)]
 #[command(version)]
@@ -61,6 +62,14 @@ struct Args {
   #[arg(long)]
   foreground: bool,
 
+  /// Redirect stdout to file (only when in background)
+  #[arg(long)]
+  stdout: Option<PathBuf>,
+
+  /// Redirect stderr to file (only when in background)
+  #[arg(long)]
+  stderr: Option<PathBuf>,
+
   /// Mount point
   mount_point: PathBuf
 }
@@ -83,16 +92,35 @@ fn main() {
     options.push(MountOption::AutoUnmount);
   }
 
-  // TODO: support background mount
-  fuser::mount2(
-    RangeFs::new(
-      args.file,
-      args.offset,
-      args.size,
-      args.name,
-      args.timeout
-    ),
-    args.mount_point,
-    &options
-  ).unwrap();
+  let mount_fs = move || {
+    fuser::mount2(
+      RangeFs::new(
+        args.file,
+        args.offset,
+        args.size,
+        args.name,
+        args.timeout
+      ),
+      args.mount_point,
+      &options
+    ).unwrap();
+  };
+
+  if args.foreground {
+    mount_fs();
+  } else {
+    let mut daemon = Daemonize::new();
+      // .working_directory(".");
+    if let Some(stdout) = args.stdout {
+      daemon = daemon.stdout(std::fs::File::create(stdout).unwrap());
+    }
+    if let Some(stderr) = args.stderr {
+      daemon = daemon.stderr(std::fs::File::create(stderr).unwrap());
+    }
+
+    match daemon.start() {
+      Ok(_) => mount_fs(),
+      Err(e) => eprintln!("error creating daemon: {}", e)
+    };
+  }
 }
