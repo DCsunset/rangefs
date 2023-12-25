@@ -1,9 +1,9 @@
 [package]
 name = "rangefs"
-version = "0.3.0"
+version = "0.1.0"
 edition = "2021"
 authors = ["DCsunset"]
-description = "A fuse-based filesystem to map ranges in file or device as individual files."
+description = "A fuse-based filesystem to map ranges in file to individual files."
 readme = "README.md"
 repository = "https://github.com/DCsunset/rangefs"
 license = "AGPL-3.0"
