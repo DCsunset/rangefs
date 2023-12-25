@@ -1,4 +1,4 @@
-const re = /name = "snapshotfs"\nversion = "(\d\.\d\.\d)"/;
+const re = /name = "rangefs"\nversion = "(\d\.\d\.\d)"/;
 
 function readVersion(contents) {
 	const matches = contents.match(re);
@@ -6,7 +6,7 @@ function readVersion(contents) {
 }
 
 function writeVersion(contents, version) {
-	return contents.replace(re, `name = "snapshotfs"\nversion = "${version}"`);
+	return contents.replace(re, `name = "rangefs"\nversion = "${version}"`);
 }
 
 const updater = { readVersion, writeVersion };
