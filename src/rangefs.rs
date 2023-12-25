@@ -42,8 +42,8 @@ pub struct RangeFs {
 }
 
 impl RangeFs {
-  pub fn new(files: Vec<PathBuf>, offsets: Vec<u64>, sizes: Vec<u64>, names: Vec<PathBuf>, timeout_secs: u64) -> Self {
-    let (file_map, inode_map) = RangeFs::init_file_inode_map(&files, &offsets, &sizes, &names);
+  pub fn new(files: &Vec<PathBuf>, names: &Vec<PathBuf>, offsets: &Vec<u64>, sizes: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>, timeout_secs: u64) -> Self {
+    let (file_map, inode_map) = RangeFs::init_file_inode_map(files, names, offsets, sizes, uids, gids);
     Self {
       timeout: Duration::from_secs(timeout_secs),
       file_map,
@@ -52,17 +52,19 @@ impl RangeFs {
   }
 
   /// Init file_map and inode_map
-  fn init_file_inode_map(paths: &Vec<PathBuf>, offsets: &Vec<u64>, sizes: &Vec<u64>, names: &Vec<PathBuf>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
+  fn init_file_inode_map(paths: &Vec<PathBuf>, names: &Vec<PathBuf>, offsets: &Vec<u64>, sizes: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
     let mut file_map: HashMap<OsString, _> = HashMap::new();
     let mut inode_map = HashMap::new();
-    for (ino, path, offset, size, n) in izip!(
+    for (ino,  path, n, offset, size, uid, gid) in izip!(
       // ino start fro 2 as 1 is for ROOT_INODE
       2..,
       paths,
+      names.iter().map(|n| Some(n)).chain(iter::repeat(None)),
       // default offset is 0
       offsets.iter().cloned().chain(iter::repeat(0)),
-      sizes.iter().map(|s| Some(s.clone())).chain(iter::repeat(None)),
-      names.iter().map(|n| Some(n)).chain(iter::repeat(None))
+      sizes.iter().cloned().map(Some).chain(iter::repeat(None)),
+      uids.iter().cloned().map(Some).chain(iter::repeat(None)),
+      gids.iter().cloned().map(Some).chain(iter::repeat(None))
     ) {
       // use original device name as default name if not specified
       // let name = n.unwrap_or(path).as_os_str().to_os_string();
@@ -81,7 +83,9 @@ impl RangeFs {
             path: path.into(),
             ino,
             offset,
-            size
+            size,
+            uid,
+            gid
           }) {
             Ok(info) => {
               file_map.insert(name, ino);

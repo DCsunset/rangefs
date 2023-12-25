@@ -27,23 +27,31 @@ use daemonize::Daemonize;
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-  /// Source files to map range from
+  /// source files to map range from
   #[arg(short, long)]
   file: Vec<PathBuf>,
 
-  /// Custom name for mounted file
+  /// custom name for mounted file
   #[arg(short, long)]
   name: Vec<PathBuf>,
 
-  /// Start of the range in file (default to start of file)
+  /// start of the range in file (default to start of file)
   #[arg(short, long)]
   offset: Vec<u64>,
 
-  /// Size of for range in file (range default to end of file)
+  /// size of for range in file (range default to end of file)
   #[arg(short, long)]
   size: Vec<u64>,
 
-  /// Allow other users to access the mounted fs
+  /// uid of the mounted file (default to source uid)
+  #[arg(short, long)]
+  uid: Vec<u32>,
+
+  /// gid of the mounted file (default to source gid)
+  #[arg(short, long)]
+  gid: Vec<u32>,
+
+  /// allow other users to access the mounted fs
   #[arg(long)]
   allow_other: bool,
 
@@ -101,10 +109,12 @@ fn main() {
   let mount_fs = move || {
     fuser::mount2(
       RangeFs::new(
-        args.file,
-        args.offset,
-        args.size,
-        args.name,
+        &args.file,
+        &args.name,
+        &args.offset,
+        &args.size,
+        &args.uid,
+        &args.gid,
         args.timeout
       ),
       args.mount_point,

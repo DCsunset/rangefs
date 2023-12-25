@@ -25,7 +25,9 @@ pub struct InodeInfoOptions {
 	pub path: OsString,
   pub ino: u64,
   pub offset: u64,
-  pub size: Option<u64>
+  pub size: Option<u64>,
+  pub uid: Option<u32>,
+  pub gid: Option<u32>
 }
 
 // InodeInfo corresponds to top level dirs
@@ -104,8 +106,8 @@ pub fn derive_attr(src_metadata: &fs::Metadata, options: &InodeInfoOptions) -> F
 		kind: FileType::RegularFile,
 		perm: perm as u16,
 		nlink: 1,
-		uid: src_metadata.uid(),
-		gid: src_metadata.gid(),
+		uid: options.uid.unwrap_or(src_metadata.uid()),
+		gid: options.gid.unwrap_or(src_metadata.gid()),
 		rdev: 0,
 		blksize: 512,
 		flags: 0 // macOS only
