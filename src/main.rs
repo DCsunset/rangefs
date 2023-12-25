@@ -13,6 +13,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+extern crate env_logger;
+
 mod rangefs;
 mod metadata;
 
@@ -75,7 +77,11 @@ struct Args {
 }
 
 fn main() {
-  env_logger::init();
+  let env = env_logger::Env::default()
+    .filter_or("RANGEFS_LOG", "warn")
+    .write_style("RANGEFS_LOG_STYLE");
+  env_logger::init_from_env(env);
+
   let args = Args::parse();
   let mut options = vec![
     MountOption::RO,
@@ -109,8 +115,7 @@ fn main() {
   if args.foreground {
     mount_fs();
   } else {
-    let mut daemon = Daemonize::new();
-      // .working_directory(".");
+    let mut daemon = Daemonize::new().working_directory(".");
     if let Some(stdout) = args.stdout {
       daemon = daemon.stdout(std::fs::File::create(stdout).unwrap());
     }
