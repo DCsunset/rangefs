@@ -54,6 +54,8 @@ jobs:
           path: target/${{ matrix.target }}/release/rangefs
 
   publish:
+    permissions:
+      contents: write
     name: Publish
     needs: [build]
     runs-on: ubuntu-latest
