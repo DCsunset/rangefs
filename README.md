@@ -29,6 +29,9 @@ rangefs -f file1 -o 1 -n f1 -f file1 -o 2 -n f2 <mount_point>
 
 # unmount
 fusermount -u <mount_point>
+
+# To adjust log level
+RANGEFS_LOG=info rangefs -f file1 -o 1 -n f1 --foreground <mount_point>
 ```
 
 The mount point will be a read-only filesystem containing files that correponding to the specified ranges in source files.
