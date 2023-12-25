@@ -2,8 +2,7 @@
 
 [![crates.io](https://badgen.net/crates/v/rangefs)](https://crates.io/crates/rangefs)
 
-A fuse-based filesystem to access block devices as normal files.
-
+A fuse-based filesystem to map ranges in file to individual files.
 
 ## Installation
 
