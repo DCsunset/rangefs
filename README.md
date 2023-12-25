@@ -14,6 +14,8 @@ You can also use cargo to install it:
 cargo install rangefs
 ```
 
+If you are using Nix, you can also install it from NUR package `nur.repos.dcsunset.rangefs`.
+
 ## Usage
 
 To mount files with range to a mount point:
