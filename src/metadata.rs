@@ -13,32 +13,37 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::{ffi::OsString, time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, path::Path, io};
+use std::{time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, io, ffi::OsString};
 
 use fuser::{FileAttr, FileType};
 use libc::{S_IXUSR, S_IXGRP, S_IXOTH, S_IFMT};
 use log::warn;
 
+/// Option to init or update InodeInfo
+pub struct InodeInfoOptions {
+  /// path of the source file
+	pub path: OsString,
+  pub ino: u64,
+  pub offset: u64,
+  pub size: Option<u64>
+}
+
 // InodeInfo corresponds to top level dirs
 pub struct InodeInfo {
-  pub ino: u64,
-	pub path: OsString,
+  /// Actuall attr of the virtual file
 	pub attr: FileAttr,
-  pub offset: u64,
-  pub size: Option<u64>,
+  /// Options
+  pub options: InodeInfoOptions,
 	/// Last update timestamp
 	timestamp: SystemTime
 }
 
 impl InodeInfo {
-	pub fn new(path: impl AsRef<Path>, ino: u64, offset: u64, size: Option<u64>) -> io::Result<Self> {
-		let attr = InodeInfo::get_metadata(path.as_ref(), ino, offset, size)?;
+	pub fn new(options: InodeInfoOptions) -> io::Result<Self> {
+		let attr = InodeInfo::get_metadata(&options)?;
 		Ok(Self {
-			path: path.as_ref().as_os_str().to_os_string(),
-      ino,
-      offset,
-      size,
 			attr,
+      options,
 			timestamp: SystemTime::now()
 		})
 	}
@@ -59,16 +64,16 @@ impl InodeInfo {
 
 	pub fn update_info(&mut self, timeout: Duration) -> io::Result<()> {
 		if self.outdated(SystemTime::now(), timeout) {
-			let attr = InodeInfo::get_metadata(&self.path, self.ino, self.offset, self.size)?;
+			let attr = InodeInfo::get_metadata(&self.options)?;
 			self.attr = attr;
 			self.timestamp = SystemTime::now();
 		}
 		Ok(())
 	}
 
-	fn get_metadata(path: impl AsRef<Path>, ino: u64, offset: u64, size: Option<u64>) -> io::Result<FileAttr> {
-		let src_metadata = fs::metadata(&path)?;
-		let attr = derive_attr(&src_metadata,	ino, offset, size);
+	fn get_metadata(options: &InodeInfoOptions) -> io::Result<FileAttr> {
+		let src_metadata = fs::metadata(&options.path)?;
+		let attr = derive_attr(&src_metadata,	options);
 		Ok(attr)
 	}
 }
@@ -77,7 +82,7 @@ impl InodeInfo {
 pub const ROOT_INODE: u64 = 1;
 
 // Derive attr from metadata of existing file
-pub fn derive_attr(src_metadata: &fs::Metadata, ino: u64, offset: u64, size: Option<u64>) -> FileAttr {
+pub fn derive_attr(src_metadata: &fs::Metadata, options: &InodeInfoOptions) -> FileAttr {
 	let cur_time = SystemTime::now();
 	// permission bits (excluding the format bits)
 	let mut perm = src_metadata.mode() & !S_IFMT;
@@ -85,10 +90,10 @@ pub fn derive_attr(src_metadata: &fs::Metadata, ino: u64, offset: u64, size: Opt
 		// remove executable bit
 		perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
 	}
-  let size = size.unwrap_or(src_metadata.size().saturating_sub(offset));
+  let size = options.size.unwrap_or(src_metadata.size().saturating_sub(options.offset));
 
 	FileAttr {
-		ino,
+		ino: options.ino,
 		size,
 		blocks: size.div_ceil(512),
 		// Convert unix timestamp to SystemTime

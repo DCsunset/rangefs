@@ -28,7 +28,7 @@ use std::{
   path::{Path, PathBuf}, cmp
 };
 use log::{error, warn, info};
-use crate::metadata::{InodeInfo, ROOT_INODE};
+use crate::metadata::{InodeInfo, ROOT_INODE, InodeInfoOptions};
 use libc::{EIO, ENOENT};
 use itertools::izip;
 
@@ -66,18 +66,23 @@ impl RangeFs {
     ) {
       // use original device name as default name if not specified
       // let name = n.unwrap_or(path).as_os_str().to_os_string();
-      let name = match n {
-        Some(name) => name.as_os_str().to_os_string(),
+      let name: OsString = match n {
+        Some(name) => name.into(),
         None => {
           path.as_path().file_name()
             .expect(&format!("invalid source file: {:?}", path))
-            .to_os_string()
+            .into()
         }
       };
       match file_map.get(&name) {
         Some(_) => info!("duplicate source paths"),
         None => {
-          match InodeInfo::new(path, ino, offset, size) {
+          match InodeInfo::new(InodeInfoOptions {
+            path: path.into(),
+            ino,
+            offset,
+            size
+          }) {
             Ok(info) => {
               file_map.insert(name, ino);
               inode_map.insert(ino, info);
@@ -201,7 +206,7 @@ impl Filesystem for RangeFs {
         match info.update_info(self.timeout) {
           Ok(_) => reply.opened(0, 0),
           Err(err) => {
-            warn!("error opening file {:?}: {}", info.path, err);
+            warn!("error opening file {:?}: {}", info.options.path, err);
             if let Some(e) = err.raw_os_error() {
               reply.error(e);
               return;
@@ -228,14 +233,14 @@ impl Filesystem for RangeFs {
     assert!(offset >= 0);
     match self.inode_map.get(&ino) {
       Some(info) => {
-        let o = info.offset + offset as u64;
+        let o = info.options.offset + offset as u64;
         let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
-        match read_at(&info.path, o, s as usize) {
+        match read_at(&info.options.path, o, s as usize) {
           Ok(data) => {
             reply.data(&data);
           },
           Err(err) => {
-            error!("error reading file {:?}: {}", info.path, err);
+            error!("error reading file {:?}: {}", info.options.path, err);
             reply.error(EIO);
           }
         }
