@@ -32,6 +32,8 @@ fusermount -u <mount_point>
 ```
 
 The mount point will be a read-only filesystem containing files that correponding to the specified ranges in source files.
+To mount multiple files, the following options can be repeated to configure different sources:
+`-f`, `-n`, `-s`, `-u`, `-g`.
 
 Note that the program will run in the background by default.
 Use flag `--foreground` to run it in the foreground.
@@ -40,7 +42,7 @@ If the program exits without using `fusermount`,
 `fusermoutn` still needs to be used even after the program exits.
 You can also use `-a` option to auto unmount the fs upon program exit.
 
-Note that =rangefs= also supports block special file.
+Note that rangefs also supports block special file.
 However, you need to speicify the size of the range.
 Otherwise, the default size will be 0 (same as that in the block file metadata).
 
