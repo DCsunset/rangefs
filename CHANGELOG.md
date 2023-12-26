@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.2.0](https://github.com/DCsunset/rangefs/compare/v0.1.0...v0.2.0) (2023-12-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* support mount.fuse through -o option
+
+### Features
+
+* support mount.fuse through -o option ([55fe171](https://github.com/DCsunset/rangefs/commit/55fe1718039e8ea3d16ae98999c7f8304a68f2ca))
+
+
+### Bug Fixes
+
+* use root id constant from fuser ([9031703](https://github.com/DCsunset/rangefs/commit/9031703a7537e3961c5f4793264422fa85eb74f4))
+
 ## 0.1.0 (2023-12-25)
 
 
