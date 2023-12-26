@@ -22,7 +22,7 @@ use log::{warn, debug};
 /// Option to init or update InodeInfo
 pub struct InodeInfoOptions {
   /// path of the source file
-	pub path: OsString,
+  pub path: OsString,
   pub ino: u64,
   pub start: u64,
   pub length: Option<u64>,
@@ -35,104 +35,103 @@ pub struct InodeInfo {
   // whether error encountered when reading source file metadata
   pub err: bool,
   /// Actuall attr of the virtual file
-	pub attr: FileAttr,
+  pub attr: FileAttr,
   /// Options
   pub options: InodeInfoOptions,
-	/// Last update timestamp
-	timestamp: SystemTime
+  /// Last update timestamp
+  timestamp: SystemTime
 }
 
 impl InodeInfo {
-	pub fn new(options: InodeInfoOptions) -> Self {
-		let (attr, err) = InodeInfo::get_metadata(&options);
-		Self {
+  pub fn new(options: InodeInfoOptions) -> Self {
+    let (attr, err) = InodeInfo::get_metadata(&options);
+    Self {
       err,
-			attr,
+      attr,
       options,
-			timestamp: SystemTime::now()
-		}
-	}
+      timestamp: SystemTime::now()
+    }
+  }
 
-	pub fn outdated(&self, now: SystemTime, timeout: Duration) -> bool {
-		match now.duration_since(self.timestamp) {
-			Ok(elapsed)	=> {
-				// update if outdated
-				elapsed > timeout
-			},
-			Err(err) => {
-				warn!("System time error: {err}");
-				// Always outdated since timestamp should be before now
-				true
-			}
-		}
-	}
+  pub fn outdated(&self, now: SystemTime, timeout: Duration) -> bool {
+    match now.duration_since(self.timestamp) {
+      Ok(elapsed) => {
+        // update if outdated
+        elapsed > timeout
+      },
+      Err(err) => {
+        warn!("System time error: {err}");
+        // Always outdated since timestamp should be before now
+        true
+      }
+    }
+  }
 
-	pub fn update_info(&mut self, timeout: Duration) {
-		if self.outdated(SystemTime::now(), timeout) {
+  pub fn update_info(&mut self, timeout: Duration) {
+    if self.outdated(SystemTime::now(), timeout) {
       debug!("updating inode info");
-			let (attr, err) = InodeInfo::get_metadata(&self.options);
-			self.attr = attr;
+      let (attr, err) = InodeInfo::get_metadata(&self.options);
+      self.attr = attr;
       self.err = err;
-			self.timestamp = SystemTime::now();
-		}
-	}
+      self.timestamp = SystemTime::now();
+    }
+  }
 
   // Get and derive attr from metadata of existing file
   pub fn get_metadata(options: &InodeInfoOptions) -> (FileAttr, bool) {
     let cur_time = SystemTime::now();
     match fs::metadata(&options.path) {
       Ok(src_metadata) => {
-	      // permission bits (excluding the format bits)
-	      let mut perm = src_metadata.mode() & !S_IFMT;
-	      if src_metadata.is_dir() {
-		      // remove executable bit
-		      perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
-	      }
+        // permission bits (excluding the format bits)
+        let mut perm = src_metadata.mode() & !S_IFMT;
+        if src_metadata.is_dir() {
+          // remove executable bit
+          perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
+        }
         let size = options.length.unwrap_or(src_metadata.size().saturating_sub(options.start));
 
-	      (FileAttr {
-		      ino: options.ino,
-		      size,
-		      blocks: size.div_ceil(512),
-		      // Convert unix timestamp to SystemTime
-		      atime: src_metadata.accessed().unwrap_or(cur_time),
-		      mtime: src_metadata.modified().unwrap_or(cur_time),
-		      ctime: src_metadata.accessed().unwrap_or(cur_time),
-		      crtime: src_metadata.created().unwrap_or(cur_time), // macOS only
-		      kind: FileType::RegularFile,
-		      perm: perm as u16,
-		      nlink: 1,
-		      uid: options.uid.unwrap_or(src_metadata.uid()),
-		      gid: options.gid.unwrap_or(src_metadata.gid()),
-		      rdev: 0,
-		      blksize: 512,
-		      flags: 0 // macOS only
-	      }, false)
+        (FileAttr {
+          ino: options.ino,
+          size,
+          blocks: size.div_ceil(512),
+          // Convert unix timestamp to SystemTime
+          atime: src_metadata.accessed().unwrap_or(cur_time),
+          mtime: src_metadata.modified().unwrap_or(cur_time),
+          ctime: src_metadata.accessed().unwrap_or(cur_time),
+          crtime: src_metadata.created().unwrap_or(cur_time), // macOS only
+          kind: FileType::RegularFile,
+          perm: perm as u16,
+          nlink: 1,
+          uid: options.uid.unwrap_or(src_metadata.uid()),
+          gid: options.gid.unwrap_or(src_metadata.gid()),
+          rdev: 0,
+          blksize: 512,
+          flags: 0 // macOS only
+        }, false)
       }
       Err(err) => {
         warn!("error reading metadata from {:?}: {}", options.path, err);
         let size = options.length.unwrap_or(0);
         // dummy attr
-	      (FileAttr {
-		      ino: options.ino,
-		      size: 0,
-		      blocks: size.div_ceil(512),
-		      // Convert unix timestamp to SystemTime
-		      atime: cur_time,
-		      mtime: cur_time,
-		      ctime: cur_time,
-		      crtime: cur_time, // macOS only
-		      kind: FileType::RegularFile,
-		      perm: 0o666,
-		      nlink: 1,
-		      uid: options.uid.unwrap_or(0),
-		      gid: options.gid.unwrap_or(0),
-		      rdev: 0,
-		      blksize: 512,
-		      flags: 0 // macOS only
-	      }, true)
+        (FileAttr {
+          ino: options.ino,
+          size: 0,
+          blocks: size.div_ceil(512),
+          // Convert unix timestamp to SystemTime
+          atime: cur_time,
+          mtime: cur_time,
+          ctime: cur_time,
+          crtime: cur_time, // macOS only
+          kind: FileType::RegularFile,
+          perm: 0o666,
+          nlink: 1,
+          uid: options.uid.unwrap_or(0),
+          gid: options.gid.unwrap_or(0),
+          rdev: 0,
+          blksize: 512,
+          flags: 0 // macOS only
+        }, true)
       }
     }
   }
-
 }
