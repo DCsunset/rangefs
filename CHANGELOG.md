@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.3.0](https://github.com/DCsunset/rangefs/compare/v0.2.0...v0.3.0) (2023-12-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename options to prevent conflict with mount options
+
+### Features
+
+* add placeholder when source file doesn't exist ([92eb18b](https://github.com/DCsunset/rangefs/commit/92eb18b8f62d3bac0b1047bf06c39eaac546a581))
+
+
+### Bug Fixes
+
+* rename options to prevent conflict with mount options ([d84e9ed](https://github.com/DCsunset/rangefs/commit/d84e9edda62f6ba9460b461be3fb6d3cf592e274))
+
 ## [0.2.0](https://github.com/DCsunset/rangefs/compare/v0.1.0...v0.2.0) (2023-12-26)
 
 
