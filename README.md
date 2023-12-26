@@ -2,7 +2,7 @@
 
 [![crates.io](https://badgen.net/crates/v/rangefs)](https://crates.io/crates/rangefs)
 
-A fuse-based filesystem to map ranges in file to individual files.
+A FUSE-based read-only filesystem to map ranges in file to individual files.
 
 ## Installation
 
