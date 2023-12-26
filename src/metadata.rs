@@ -24,8 +24,8 @@ pub struct InodeInfoOptions {
   /// path of the source file
 	pub path: OsString,
   pub ino: u64,
-  pub offset: u64,
-  pub size: Option<u64>,
+  pub start: u64,
+  pub length: Option<u64>,
   pub uid: Option<u32>,
   pub gid: Option<u32>
 }
@@ -89,7 +89,7 @@ pub fn derive_attr(src_metadata: &fs::Metadata, options: &InodeInfoOptions) -> F
 		// remove executable bit
 		perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
 	}
-  let size = options.size.unwrap_or(src_metadata.size().saturating_sub(options.offset));
+  let size = options.length.unwrap_or(src_metadata.size().saturating_sub(options.start));
 
 	FileAttr {
 		ino: options.ino,

@@ -43,8 +43,8 @@ pub struct RangeFs {
 }
 
 impl RangeFs {
-  pub fn new(files: &Vec<PathBuf>, names: &Vec<PathBuf>, offsets: &Vec<u64>, sizes: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>, timeout_secs: u64) -> Self {
-    let (file_map, inode_map) = RangeFs::init_file_inode_map(files, names, offsets, sizes, uids, gids);
+  pub fn new(files: &Vec<PathBuf>, names: &Vec<PathBuf>, starts: &Vec<u64>, lengths: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>, timeout_secs: u64) -> Self {
+    let (file_map, inode_map) = RangeFs::init_file_inode_map(files, names, starts, lengths, uids, gids);
     Self {
       timeout: Duration::from_secs(timeout_secs),
       file_map,
@@ -53,17 +53,17 @@ impl RangeFs {
   }
 
   /// Init file_map and inode_map
-  fn init_file_inode_map(paths: &Vec<PathBuf>, names: &Vec<PathBuf>, offsets: &Vec<u64>, sizes: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
+  fn init_file_inode_map(paths: &Vec<PathBuf>, names: &Vec<PathBuf>, starts: &Vec<u64>, lengths: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
     let mut file_map: HashMap<OsString, _> = HashMap::new();
     let mut inode_map = HashMap::new();
-    for (ino,  path, n, offset, size, uid, gid) in izip!(
+    for (ino,  path, n, start, length, uid, gid) in izip!(
       // ino start fro 2 as 1 is for FUSE root directory
       2..,
       paths,
       names.iter().map(|n| Some(n)).chain(iter::repeat(None)),
       // default offset is 0
-      offsets.iter().cloned().chain(iter::repeat(0)),
-      sizes.iter().cloned().map(Some).chain(iter::repeat(None)),
+      starts.iter().cloned().chain(iter::repeat(0)),
+      lengths.iter().cloned().map(Some).chain(iter::repeat(None)),
       uids.iter().cloned().map(Some).chain(iter::repeat(None)),
       gids.iter().cloned().map(Some).chain(iter::repeat(None))
     ) {
@@ -83,8 +83,8 @@ impl RangeFs {
           match InodeInfo::new(InodeInfoOptions {
             path: path.into(),
             ino,
-            offset,
-            size,
+            start,
+            length,
             uid,
             gid
           }) {
@@ -238,7 +238,7 @@ impl Filesystem for RangeFs {
     assert!(offset >= 0);
     match self.inode_map.get(&ino) {
       Some(info) => {
-        let o = info.options.offset + offset as u64;
+        let o = info.options.start + offset as u64;
         let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
         match read_at(&info.options.path, o, s as usize) {
           Ok(data) => {

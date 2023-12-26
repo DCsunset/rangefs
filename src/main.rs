@@ -38,12 +38,12 @@ struct Args {
   name: Vec<PathBuf>,
 
   /// start of the range in file (default to start of file)
-  #[arg(short = 'O', long)]
-  offset: Vec<u64>,
-
-  /// size of for range in file (range default to end of file)
   #[arg(short, long)]
-  size: Vec<u64>,
+  start: Vec<u64>,
+
+  /// length of for range in file (range default to end of file)
+  #[arg(short, long)]
+  length: Vec<u64>,
 
   /// uid of the mounted file (default to source uid)
   #[arg(short, long)]
@@ -148,11 +148,13 @@ fn main() -> Result<()> {
           match parts[0] {
             "file" => args.file.push(parts[1].into()),
             "name" => args.name.push(parts[1].into()),
-            "offset" => args.offset.push(parts[1].parse()?),
-            "size" => args.size.push(parts[1].parse()?),
+            "start" => args.start.push(parts[1].parse()?),
+            "length" => args.length.push(parts[1].parse()?),
             "uid" => args.uid.push(parts[1].parse()?),
             "gid" => args.gid.push(parts[1].parse()?),
             "timeout" => args.timeout = parts[1].parse()?,
+            "stdout" => args.stdout = Some(parts[1].into()),
+            "stderr" => args.stderr = Some(parts[1].into()),
             _ => options.push(MountOption::CUSTOM(x))
           };
         },
@@ -168,7 +170,7 @@ fn main() -> Result<()> {
   }
   let mount_point = args.overwrite_mount_point.unwrap_or(args.mount_point);
   if !mount_point.as_path().is_dir() {
-    return Err(anyhow!("error: Mount point doesn't exist or isn't a directory"));
+    return Err(anyhow!("Mount point doesn't exist or isn't a directory"));
   }
 
   let mount_fs = || {
@@ -176,8 +178,8 @@ fn main() -> Result<()> {
       RangeFs::new(
         &args.file,
         &args.name,
-        &args.offset,
-        &args.size,
+        &args.start,
+        &args.length,
         &args.uid,
         &args.gid,
         args.timeout
@@ -200,7 +202,7 @@ fn main() -> Result<()> {
 
     match daemon.start() {
       Ok(_) => mount_fs(),
-      Err(e) => eprintln!("error creating daemon: {}", e)
+      Err(e) => return Err(anyhow!("error creating daemon: {}", e))
     };
   }
 
