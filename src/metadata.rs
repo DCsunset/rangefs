@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::{time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, io, ffi::OsString};
+use std::{time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, ffi::OsString};
 
 use fuser::{FileAttr, FileType};
 use libc::{S_IXUSR, S_IXGRP, S_IXOTH, S_IFMT};

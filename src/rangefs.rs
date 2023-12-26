@@ -28,7 +28,7 @@ use std::{
   collections::HashMap,
   path::{Path, PathBuf}, cmp
 };
-use log::{error, warn, info};
+use log::{error, info};
 use crate::metadata::{InodeInfo, InodeInfoOptions};
 use libc::{EIO, ENOENT};
 use itertools::izip;
