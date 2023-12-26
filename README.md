@@ -24,7 +24,7 @@ To mount files with range to a mount point:
 # mount
 rangefs --file file1 --start 0 --length 8 <mount_point>
 # multiple files
-rangefs -f file1 -s 1 -f file2 -o 2 <mount_point>
+rangefs -f file1 -s 1 -f file2 -s 2 <mount_point>
 # rename mounted files
 rangefs -f file1 -s 1 -n f1 -f file1 -s 2 -n f2 <mount_point>
 
@@ -32,7 +32,7 @@ rangefs -f file1 -s 1 -n f1 -f file1 -s 2 -n f2 <mount_point>
 fusermount -u <mount_point>
 
 # To adjust log level
-RANGEFS_LOG=info rangefs -f file1 -O 1 -n f1 --foreground <mount_point>
+RANGEFS_LOG=info rangefs -f file1 -s 1 -n f1 --foreground <mount_point>
 ```
 
 The mount point will be a read-only filesystem containing files that correponding to the specified ranges in source files.
