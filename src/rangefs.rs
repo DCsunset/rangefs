@@ -80,22 +80,16 @@ impl RangeFs {
       match file_map.get(&name) {
         Some(_) => info!("duplicate source paths"),
         None => {
-          match InodeInfo::new(InodeInfoOptions {
+          let info = InodeInfo::new(InodeInfoOptions {
             path: path.into(),
             ino,
             start,
             length,
             uid,
             gid
-          }) {
-            Ok(info) => {
-              file_map.insert(name, ino);
-              inode_map.insert(ino, info);
-            }
-            Err(err) => {
-              warn!("error creating inode info: {}", err);
-            }
-          }
+          });
+          inode_map.insert(ino, info);
+          file_map.insert(name, ino);
         }
       };
     }
@@ -114,20 +108,8 @@ impl Filesystem for RangeFs {
     match self.file_map.get(name) {
       Some(ino) => {
         let info = self.inode_map.get_mut(ino).expect(&format!("invalid ino: {}", ino));
-        match info.update_info(self.timeout) {
-          Ok(_) => {
-            reply.entry(&self.timeout, &info.attr, 0);
-            return;
-          }
-          Err(err) => {
-            warn!("error updating inode info: {}", err);
-            self.inode_map.remove(ino);
-            if let Some(e) = err.raw_os_error() {
-              reply.error(e);
-              return;
-            }
-          }
-        };
+        info.update_info(self.timeout);
+        reply.entry(&self.timeout, &info.attr, 0);
       },
       None => {
         reply.error(ENOENT);
@@ -157,17 +139,15 @@ impl Filesystem for RangeFs {
       });
     } else {
       if let Some(info) = self.inode_map.get_mut(&ino) {
-        match info.update_info(self.timeout) {
-          Ok(_) => {
-            reply.attr(&self.timeout, &info.attr);
-            return;
-          },
-          Err(err) => {
-            warn!("error updating inode info: {}", err);
-          }
+        info.update_info(self.timeout);
+        if info.err {
+          reply.error(EIO);
+          return;
         }
+        reply.attr(&self.timeout, &info.attr);
+      } else {
+        reply.error(ENOENT);
       }
-      reply.error(ENOENT);
     }
   }
 
@@ -208,17 +188,13 @@ impl Filesystem for RangeFs {
   fn open(&mut self, _req: &Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
     match self.inode_map.get_mut(&ino) {
       Some(info) => {
-        match info.update_info(self.timeout) {
-          Ok(_) => reply.opened(0, 0),
-          Err(err) => {
-            warn!("error opening file {:?}: {}", info.options.path, err);
-            if let Some(e) = err.raw_os_error() {
-              reply.error(e);
-              return;
-            }
-          }
+        info.update_info(self.timeout);
+        if info.err {
+          reply.error(EIO);
+          return;
         }
         // Return dummy fh and flags as we only use ino in read
+        reply.opened(0, 0);
       },
       None => reply.error(ENOENT)
     };
@@ -238,6 +214,10 @@ impl Filesystem for RangeFs {
     assert!(offset >= 0);
     match self.inode_map.get(&ino) {
       Some(info) => {
+        if info.err {
+          reply.error(EIO);
+          return;
+        }
         let o = info.options.start + offset as u64;
         let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
         match read_at(&info.options.path, o, s as usize) {

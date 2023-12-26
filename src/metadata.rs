@@ -17,7 +17,7 @@ use std::{time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, io, 
 
 use fuser::{FileAttr, FileType};
 use libc::{S_IXUSR, S_IXGRP, S_IXOTH, S_IFMT};
-use log::warn;
+use log::{warn, debug};
 
 /// Option to init or update InodeInfo
 pub struct InodeInfoOptions {
@@ -32,6 +32,8 @@ pub struct InodeInfoOptions {
 
 // InodeInfo corresponds to top level dirs
 pub struct InodeInfo {
+  // whether error encountered when reading source file metadata
+  pub err: bool,
   /// Actuall attr of the virtual file
 	pub attr: FileAttr,
   /// Options
@@ -41,13 +43,14 @@ pub struct InodeInfo {
 }
 
 impl InodeInfo {
-	pub fn new(options: InodeInfoOptions) -> io::Result<Self> {
-		let attr = InodeInfo::get_metadata(&options)?;
-		Ok(Self {
+	pub fn new(options: InodeInfoOptions) -> Self {
+		let (attr, err) = InodeInfo::get_metadata(&options);
+		Self {
+      err,
 			attr,
       options,
 			timestamp: SystemTime::now()
-		})
+		}
 	}
 
 	pub fn outdated(&self, now: SystemTime, timeout: Duration) -> bool {
@@ -64,50 +67,72 @@ impl InodeInfo {
 		}
 	}
 
-	pub fn update_info(&mut self, timeout: Duration) -> io::Result<()> {
+	pub fn update_info(&mut self, timeout: Duration) {
 		if self.outdated(SystemTime::now(), timeout) {
-			let attr = InodeInfo::get_metadata(&self.options)?;
+      debug!("updating inode info");
+			let (attr, err) = InodeInfo::get_metadata(&self.options);
 			self.attr = attr;
+      self.err = err;
 			self.timestamp = SystemTime::now();
 		}
-		Ok(())
 	}
 
-	fn get_metadata(options: &InodeInfoOptions) -> io::Result<FileAttr> {
-		let src_metadata = fs::metadata(&options.path)?;
-		let attr = derive_attr(&src_metadata,	options);
-		Ok(attr)
-	}
+  // Get and derive attr from metadata of existing file
+  pub fn get_metadata(options: &InodeInfoOptions) -> (FileAttr, bool) {
+    let cur_time = SystemTime::now();
+    match fs::metadata(&options.path) {
+      Ok(src_metadata) => {
+	      // permission bits (excluding the format bits)
+	      let mut perm = src_metadata.mode() & !S_IFMT;
+	      if src_metadata.is_dir() {
+		      // remove executable bit
+		      perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
+	      }
+        let size = options.length.unwrap_or(src_metadata.size().saturating_sub(options.start));
+
+	      (FileAttr {
+		      ino: options.ino,
+		      size,
+		      blocks: size.div_ceil(512),
+		      // Convert unix timestamp to SystemTime
+		      atime: src_metadata.accessed().unwrap_or(cur_time),
+		      mtime: src_metadata.modified().unwrap_or(cur_time),
+		      ctime: src_metadata.accessed().unwrap_or(cur_time),
+		      crtime: src_metadata.created().unwrap_or(cur_time), // macOS only
+		      kind: FileType::RegularFile,
+		      perm: perm as u16,
+		      nlink: 1,
+		      uid: options.uid.unwrap_or(src_metadata.uid()),
+		      gid: options.gid.unwrap_or(src_metadata.gid()),
+		      rdev: 0,
+		      blksize: 512,
+		      flags: 0 // macOS only
+	      }, false)
+      }
+      Err(err) => {
+        warn!("error reading metadata from {:?}: {}", options.path, err);
+        let size = options.length.unwrap_or(0);
+        // dummy attr
+	      (FileAttr {
+		      ino: options.ino,
+		      size: 0,
+		      blocks: size.div_ceil(512),
+		      // Convert unix timestamp to SystemTime
+		      atime: cur_time,
+		      mtime: cur_time,
+		      ctime: cur_time,
+		      crtime: cur_time, // macOS only
+		      kind: FileType::RegularFile,
+		      perm: 0o666,
+		      nlink: 1,
+		      uid: options.uid.unwrap_or(0),
+		      gid: options.gid.unwrap_or(0),
+		      rdev: 0,
+		      blksize: 512,
+		      flags: 0 // macOS only
+	      }, true)
+      }
+    }
+  }
+
 }
-
-// Derive attr from metadata of existing file
-pub fn derive_attr(src_metadata: &fs::Metadata, options: &InodeInfoOptions) -> FileAttr {
-	let cur_time = SystemTime::now();
-	// permission bits (excluding the format bits)
-	let mut perm = src_metadata.mode() & !S_IFMT;
-	if src_metadata.is_dir() {
-		// remove executable bit
-		perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
-	}
-  let size = options.length.unwrap_or(src_metadata.size().saturating_sub(options.start));
-
-	FileAttr {
-		ino: options.ino,
-		size,
-		blocks: size.div_ceil(512),
-		// Convert unix timestamp to SystemTime
-		atime: src_metadata.accessed().unwrap_or(cur_time),
-		mtime: src_metadata.modified().unwrap_or(cur_time),
-		ctime: src_metadata.accessed().unwrap_or(cur_time),
-		crtime: src_metadata.created().unwrap_or(cur_time), // macOS only
-		kind: FileType::RegularFile,
-		perm: perm as u16,
-		nlink: 1,
-		uid: options.uid.unwrap_or(src_metadata.uid()),
-		gid: options.gid.unwrap_or(src_metadata.gid()),
-		rdev: 0,
-		blksize: 512,
-		flags: 0 // macOS only
-	}
-}
-
