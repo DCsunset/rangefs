@@ -17,7 +17,8 @@ use fuser::{
   Filesystem,
   FileType,
   Request,
-  ReplyDirectory
+  ReplyDirectory,
+  FUSE_ROOT_ID
 };
 use std::{
   fs,
@@ -28,7 +29,7 @@ use std::{
   path::{Path, PathBuf}, cmp
 };
 use log::{error, warn, info};
-use crate::metadata::{InodeInfo, ROOT_INODE, InodeInfoOptions};
+use crate::metadata::{InodeInfo, InodeInfoOptions};
 use libc::{EIO, ENOENT};
 use itertools::izip;
 
@@ -56,7 +57,7 @@ impl RangeFs {
     let mut file_map: HashMap<OsString, _> = HashMap::new();
     let mut inode_map = HashMap::new();
     for (ino,  path, n, offset, size, uid, gid) in izip!(
-      // ino start fro 2 as 1 is for ROOT_INODE
+      // ino start fro 2 as 1 is for FUSE root directory
       2..,
       paths,
       names.iter().map(|n| Some(n)).chain(iter::repeat(None)),
@@ -106,7 +107,7 @@ impl RangeFs {
 impl Filesystem for RangeFs {
   fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: fuser::ReplyEntry) {
     // Only one root directory
-    if parent != ROOT_INODE {
+    if parent != FUSE_ROOT_ID {
       reply.error(ENOENT);
       return;
     }
@@ -135,10 +136,10 @@ impl Filesystem for RangeFs {
   }
 
   fn getattr(&mut self, _req: &Request, ino: u64, reply: fuser::ReplyAttr) {
-    if ino == ROOT_INODE {
+    if ino == FUSE_ROOT_ID {
       let cur_time = SystemTime::now();
       reply.attr(&self.timeout, &fuser::FileAttr {
-        ino: ROOT_INODE,
+        ino: FUSE_ROOT_ID,
         size: 0,
         blocks: 0,
         atime: cur_time,
@@ -178,7 +179,7 @@ impl Filesystem for RangeFs {
     offset: i64,
     mut reply: ReplyDirectory,
   ) {
-    if ino != ROOT_INODE {
+    if ino != FUSE_ROOT_ID {
       reply.error(ENOENT);
       return;
     }
@@ -186,8 +187,8 @@ impl Filesystem for RangeFs {
 
     // special entries
     let mut entries = vec![
-      (ROOT_INODE, FileType::Directory, OsString::from(".")),
-      (ROOT_INODE, FileType::Directory, OsString::from("..")),
+      (FUSE_ROOT_ID, FileType::Directory, OsString::from(".")),
+      (FUSE_ROOT_ID, FileType::Directory, OsString::from("..")),
     ];
     entries.extend(self.file_map.iter().map(|(name, ino)| {
       (ino.clone(), FileType::RegularFile, name.to_os_string())

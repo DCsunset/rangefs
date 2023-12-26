@@ -80,9 +80,6 @@ impl InodeInfo {
 	}
 }
 
-// For root, inode must be 1, as specified in https://github.com/libfuse/libfuse/blob/master/include/fuse_lowlevel.h (FUSE_ROOT_ID)
-pub const ROOT_INODE: u64 = 1;
-
 // Derive attr from metadata of existing file
 pub fn derive_attr(src_metadata: &fs::Metadata, options: &InodeInfoOptions) -> FileAttr {
 	let cur_time = SystemTime::now();
