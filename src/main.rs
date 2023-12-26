@@ -19,8 +19,10 @@ mod rangefs;
 mod metadata;
 
 use std::path::PathBuf;
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use fuser::{self, MountOption};
+use log::warn;
 use rangefs::RangeFs;
 use daemonize::Daemonize;
 
@@ -36,7 +38,7 @@ struct Args {
   name: Vec<PathBuf>,
 
   /// start of the range in file (default to start of file)
-  #[arg(short, long)]
+  #[arg(short = 'O', long)]
   offset: Vec<u64>,
 
   /// size of for range in file (range default to end of file)
@@ -80,17 +82,49 @@ struct Args {
   #[arg(long)]
   stderr: Option<PathBuf>,
 
-  /// Mount point
-  mount_point: PathBuf
+  /// comma-separated mount options for compatibility with mount.fuse
+  #[arg(short)]
+  options: Option<String>,
+
+  /// mount point
+  mount_point: PathBuf,
+
+  /// overwrite mount point (used for mount.fuse)
+  overwrite_mount_point: Option<PathBuf>
 }
 
-fn main() {
+pub fn mount_option_from_str(s: &str) -> MountOption {
+  match s {
+    "auto_unmount" => MountOption::AutoUnmount,
+    "allow_other" => MountOption::AllowOther,
+    "allow_root" => MountOption::AllowRoot,
+    "default_permissions" => MountOption::DefaultPermissions,
+    "dev" => MountOption::Dev,
+    "nodev" => MountOption::NoDev,
+    "suid" => MountOption::Suid,
+    "nosuid" => MountOption::NoSuid,
+    "ro" => MountOption::RO,
+    "rw" => MountOption::RW,
+    "exec" => MountOption::Exec,
+    "noexec" => MountOption::NoExec,
+    "atime" => MountOption::Atime,
+    "noatime" => MountOption::NoAtime,
+    "dirsync" => MountOption::DirSync,
+    "sync" => MountOption::Sync,
+    "async" => MountOption::Async,
+    x if x.starts_with("fsname=") => MountOption::FSName(x[7..].into()),
+    x if x.starts_with("subtype=") => MountOption::Subtype(x[8..].into()),
+    x => MountOption::CUSTOM(x.into()),
+  }
+}
+
+fn main() -> Result<()> {
   let env = env_logger::Env::default()
     .filter_or("RANGEFS_LOG", "warn")
     .write_style("RANGEFS_LOG_STYLE");
   env_logger::init_from_env(env);
 
-  let args = Args::parse();
+  let mut args = Args::parse();
   let mut options = vec![
     MountOption::RO,
     MountOption::FSName("rangefs".to_string()),
@@ -105,8 +139,39 @@ fn main() {
   if args.auto_unmount {
     options.push(MountOption::AutoUnmount);
   }
+  if let Some(opt) = args.options {
+    for o in opt.split(',').map(mount_option_from_str) {
+      match o {
+        MountOption::RW => (),
+        MountOption::CUSTOM(x) => {
+          let parts: Vec<_> = x.split("=").collect();
+          match parts[0] {
+            "file" => args.file.push(parts[1].into()),
+            "name" => args.name.push(parts[1].into()),
+            "offset" => args.offset.push(parts[1].parse()?),
+            "size" => args.size.push(parts[1].parse()?),
+            "uid" => args.uid.push(parts[1].parse()?),
+            "gid" => args.gid.push(parts[1].parse()?),
+            "timeout" => args.timeout = parts[1].parse()?,
+            _ => options.push(MountOption::CUSTOM(x))
+          };
+        },
+        x => {
+          options.push(x);
+        },
+      };
+    }
+  }
 
-  let mount_fs = move || {
+  if args.overwrite_mount_point.is_some() && args.mount_point.as_os_str() != "rangefs" {
+    warn!("Mount point {:?} has been overwritten. (use rangefs to suppress warning)", args.mount_point);
+  }
+  let mount_point = args.overwrite_mount_point.unwrap_or(args.mount_point);
+  if !mount_point.as_path().is_dir() {
+    return Err(anyhow!("error: Mount point doesn't exist or isn't a directory"));
+  }
+
+  let mount_fs = || {
     fuser::mount2(
       RangeFs::new(
         &args.file,
@@ -117,7 +182,7 @@ fn main() {
         &args.gid,
         args.timeout
       ),
-      args.mount_point,
+      &mount_point,
       &options
     ).unwrap();
   };
@@ -138,4 +203,6 @@ fn main() {
       Err(e) => eprintln!("error creating daemon: {}", e)
     };
   }
+
+  Ok(())
 }

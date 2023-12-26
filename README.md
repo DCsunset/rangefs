@@ -24,20 +24,20 @@ To mount files with range to a mount point:
 # mount
 rangefs --file file1 --offset 0 --size 8 <mount_point>
 # multiple files
-rangefs -f file1 -o 1 -f file2 -o 2 <mount_point>
+rangefs -f file1 -O 1 -f file2 -o 2 <mount_point>
 # rename mounted files
-rangefs -f file1 -o 1 -n f1 -f file1 -o 2 -n f2 <mount_point>
+rangefs -f file1 -O 1 -n f1 -f file1 -O 2 -n f2 <mount_point>
 
 # unmount
 fusermount -u <mount_point>
 
 # To adjust log level
-RANGEFS_LOG=info rangefs -f file1 -o 1 -n f1 --foreground <mount_point>
+RANGEFS_LOG=info rangefs -f file1 -O 1 -n f1 --foreground <mount_point>
 ```
 
 The mount point will be a read-only filesystem containing files that correponding to the specified ranges in source files.
 To mount multiple files, the following options can be repeated to configure different sources:
-`-f`, `-n`, `-s`, `-u`, `-g`.
+`-f`, `-n`, `-O`, `-s`, `-u`, `-g`.
 
 Note that the program will run in the background by default.
 Use flag `--foreground` to run it in the foreground.
@@ -49,6 +49,13 @@ You can also use `-a` option to auto unmount the fs upon program exit.
 Note that rangefs also supports block special file.
 However, you need to speicify the size of the range.
 Otherwise, the default size will be 0 (same as that in the block file metadata).
+
+Rangefs also supports mounting through `mount.fuse` or `/etc/fstab`.
+In this case, the first positional argument is a dummy value (e.g. `rangefs`) and the second argument is the actual mount point.
+An example fstab config:
+```
+rangefs /mount_point fuse./path/to/rangefs nofail,allow_other,file=file1,offset=1,uid=1000,file=file2,offset=8,size=16 0 0
+```
 
 See available options using `rangefs --help`.
 
