@@ -186,22 +186,22 @@ fn main() -> Result<()> {
       ),
       &mount_point,
       &options
-    ).unwrap();
+    )
   };
 
   if args.foreground {
-    mount_fs();
+    mount_fs()?;
   } else {
     let mut daemon = Daemonize::new().working_directory(".");
     if let Some(stdout) = args.stdout {
-      daemon = daemon.stdout(std::fs::File::create(stdout).unwrap());
+      daemon = daemon.stdout(std::fs::File::create(stdout)?);
     }
     if let Some(stderr) = args.stderr {
-      daemon = daemon.stderr(std::fs::File::create(stderr).unwrap());
+      daemon = daemon.stderr(std::fs::File::create(stderr)?);
     }
 
     match daemon.start() {
-      Ok(_) => mount_fs(),
+      Ok(_) => mount_fs()?,
       Err(e) => return Err(anyhow!("error creating daemon: {}", e))
     };
   }
