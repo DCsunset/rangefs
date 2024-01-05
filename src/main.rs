@@ -22,7 +22,6 @@ use std::path::PathBuf;
 use anyhow::{Result, anyhow};
 use clap::Parser;
 use fuser::{self, MountOption};
-use log::warn;
 use rangefs::RangeFs;
 use daemonize::Daemonize;
 
@@ -89,7 +88,7 @@ struct Args {
   /// mount point
   mount_point: PathBuf,
 
-  /// overwrite mount point (used for mount.fuse)
+  /// overwrite mount point (original mount_point will be used as fsname)
   overwrite_mount_point: Option<PathBuf>
 }
 
@@ -127,7 +126,10 @@ fn main() -> Result<()> {
   let mut args = Args::parse();
   let mut options = vec![
     MountOption::RO,
-    MountOption::FSName("rangefs".to_string()),
+    MountOption::FSName(match &args.overwrite_mount_point {
+      Some(_) => args.mount_point.to_string_lossy().into(),
+      None => "rangefs".into()
+    }),
     MountOption::Subtype("rangefs".to_string()),
   ];
   if args.allow_other {
@@ -165,9 +167,6 @@ fn main() -> Result<()> {
     }
   }
 
-  if args.overwrite_mount_point.is_some() && args.mount_point.as_os_str() != "rangefs" {
-    warn!("Mount point {:?} has been overwritten. (use rangefs to suppress warning)", args.mount_point);
-  }
   let mount_point = args.overwrite_mount_point.unwrap_or(args.mount_point);
   if !mount_point.as_path().is_dir() {
     return Err(anyhow!("Mount point doesn't exist or isn't a directory"));
