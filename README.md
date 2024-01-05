@@ -51,10 +51,12 @@ However, you need to speicify the length of the range.
 Otherwise, the default length will be 0 (same as the size in the block file metadata).
 
 Rangefs also supports mounting through `mount.fuse` or `/etc/fstab`.
-In this case, the first positional argument is a dummy value (e.g. `rangefs`) and the second argument is the actual mount point.
+In this case, the first positional argument is used as fsname and the second argument is the actual mount point.
+For options that can accept multiple values, use spaces to separate them
+(repeating them won't work as mount will merge duplicate options)
 An example fstab config:
 ```
-rangefs /mount_point fuse./path/to/rangefs nodev,nosuid,nofail,allow_other,file=file1,start=1,uid=1000,file=file2,start=8,length=16 0 0
+rangefs /mount_point fuse./path/to/rangefs nofail,allow_other,file="file1 file2",start="1 2",uid=1000,length=16 0 0
 ```
 
 See available options using `rangefs --help`.

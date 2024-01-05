@@ -22,6 +22,7 @@ use std::path::PathBuf;
 use anyhow::{Result, anyhow};
 use clap::Parser;
 use fuser::{self, MountOption};
+use itertools::Itertools;
 use rangefs::RangeFs;
 use daemonize::Daemonize;
 
@@ -148,12 +149,12 @@ fn main() -> Result<()> {
         MountOption::CUSTOM(x) => {
           let parts: Vec<_> = x.split("=").collect();
           match parts[0] {
-            "file" => args.file.push(parts[1].into()),
-            "name" => args.name.push(parts[1].into()),
-            "start" => args.start.push(parts[1].parse()?),
-            "length" => args.length.push(parts[1].parse()?),
-            "uid" => args.uid.push(parts[1].parse()?),
-            "gid" => args.gid.push(parts[1].parse()?),
+            "file" => args.file = parts[1].split(" ").map_into().collect(),
+            "name" => args.name = parts[1].split(" ").map_into().collect(),
+            "start" => args.start = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
+            "length" => args.length = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
+            "uid" => args.uid = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
+            "gid" => args.gid = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
             "timeout" => args.timeout = parts[1].parse()?,
             "stdout" => args.stdout = Some(parts[1].into()),
             "stderr" => args.stderr = Some(parts[1].into()),
