@@ -56,10 +56,18 @@ impl RangeFs {
   fn init_file_inode_map(paths: &Vec<PathBuf>, names: &Vec<PathBuf>, starts: &Vec<u64>, lengths: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
     let mut file_map: HashMap<OsString, _> = HashMap::new();
     let mut inode_map = HashMap::new();
+    let max_len = vec![
+      paths.len(),
+      names.len(),
+      starts.len(),
+      lengths.len(),
+      uids.len(),
+      gids.len()
+    ].iter().max().unwrap().clone() as u64;
     for (ino,  path, n, start, length, uid, gid) in izip!(
-      // ino start fro 2 as 1 is for FUSE root directory
-      2..,
-      paths,
+      // ino start fro 2 as 1 is reserved for FUSE root directory
+      2..max_len+2,
+      paths.iter().chain(iter::repeat(paths.last().unwrap())),
       names.iter().map(|n| Some(n)).chain(iter::repeat(None)),
       // default offset is 0
       starts.iter().cloned().chain(iter::repeat(0)),

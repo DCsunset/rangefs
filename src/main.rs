@@ -125,12 +125,17 @@ fn main() -> Result<()> {
   env_logger::init_from_env(env);
 
   let mut args = Args::parse();
+  let fs_name = match &args.overwrite_mount_point {
+    Some(_) => Some(&args.mount_point),
+    None => None
+  };
+  // use fs_name as the file if no file is specified
+  if fs_name.is_some() && args.file.is_empty() {
+    args.file.push(fs_name.unwrap().into());
+  }
   let mut options = vec![
     MountOption::RO,
-    MountOption::FSName(match &args.overwrite_mount_point {
-      Some(_) => args.mount_point.to_string_lossy().into(),
-      None => "rangefs".into()
-    }),
+    MountOption::FSName(fs_name.map(|v| v.to_string_lossy().into()).unwrap_or("rangefs".into())),
     MountOption::Subtype("rangefs".to_string()),
   ];
   if args.allow_other {
@@ -166,6 +171,10 @@ fn main() -> Result<()> {
         },
       };
     }
+  }
+
+  if args.file.is_empty() {
+    return Err(anyhow!("No source file specified"));
   }
 
   let mount_point = args.overwrite_mount_point.unwrap_or(args.mount_point);
