@@ -49,7 +49,7 @@ Otherwise, the default length will be 0 (same as the size in the block file meta
 
 Rangefs also supports mounting through `mount.fuse` or `/etc/fstab`.
 To specify configs, start with `config::` and separate configs by double colons.
-For timeout, speicify `timeout::<secs>` to set it.
+For timeout, stdout and stderr, speicify `<option>::<value>` to set it.
 `::` is used instead of `=` to distinguish custom options from existing mount options.
 An example fstab config:
 ```
