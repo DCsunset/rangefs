@@ -22,36 +22,26 @@ use std::path::PathBuf;
 use anyhow::{Result, anyhow};
 use clap::Parser;
 use fuser::{self, MountOption};
-use itertools::Itertools;
 use rangefs::RangeFs;
+use metadata::InodeConfig;
 use daemonize::Daemonize;
 
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-  /// source files to map range from
-  #[arg(short, long)]
-  file: Vec<PathBuf>,
-
   /// custom name for mounted file
   #[arg(short, long)]
   name: Vec<PathBuf>,
 
-  /// start of the range in file (default to start of file)
+  /// Config string for each mapped file with colon-separated options
+  /// Supported options:
+  /// - offset=<offset> (default to 0)
+  /// - size=<size> (default range to end of file)
+  /// - name=<mapped_filename> (default to the source filename)
+  /// - uid=<uid> (default to source uid)
+  /// - gid=<gid> (default to source gid)
   #[arg(short, long)]
-  start: Vec<u64>,
-
-  /// length of for range in file (range default to end of file)
-  #[arg(short, long)]
-  length: Vec<u64>,
-
-  /// uid of the mounted file (default to source uid)
-  #[arg(short, long)]
-  uid: Vec<u32>,
-
-  /// gid of the mounted file (default to source gid)
-  #[arg(short, long)]
-  gid: Vec<u32>,
+  config: Vec<String>,
 
   /// allow other users to access the mounted fs
   #[arg(long)]
@@ -86,11 +76,11 @@ struct Args {
   #[arg(short)]
   options: Option<String>,
 
-  /// mount point
-  mount_point: PathBuf,
+  /// source file to map ranges from
+  file: PathBuf,
 
-  /// overwrite mount point (original mount_point will be used as fsname)
-  overwrite_mount_point: Option<PathBuf>
+  /// mount point
+  mount_point: PathBuf
 }
 
 pub fn mount_option_from_str(s: &str) -> MountOption {
@@ -118,53 +108,71 @@ pub fn mount_option_from_str(s: &str) -> MountOption {
   }
 }
 
+pub fn parse_config(config_str: impl AsRef<str>) -> Result<InodeConfig> {
+  let assert_opt = |cond: bool, opt_str| -> Result<()> {
+    if !cond {
+      Err(anyhow!("invalid option: {}", opt_str))
+    } else {
+      Ok(())
+    }
+  };
+
+  let mut config = InodeConfig::default();
+  if config_str.as_ref().is_empty() {
+    // use default config
+    return Ok(config);
+  }
+  for opt_str in config_str.as_ref().split(":") {
+    let parts: Vec<_> = opt_str.split("=").collect();
+    assert_opt(parts.len() == 2, opt_str)?;
+    match parts[0] {
+      "name" => config.name = Some(parts[1].into()),
+      "offset" => config.offset = Some(parts[1].parse()?),
+      "size" => config.size = Some(parts[1].parse()?),
+      "uid" => config.uid = Some(parts[1].parse()?),
+      "gid" => config.gid = Some(parts[1].parse()?),
+      _ => assert_opt(false, opt_str)?
+    };
+  }
+  Ok(config)
+}
+
 fn main() -> Result<()> {
   let env = env_logger::Env::default()
     .filter_or("RANGEFS_LOG", "warn")
     .write_style("RANGEFS_LOG_STYLE");
   env_logger::init_from_env(env);
 
-  let mut args = Args::parse();
-  let fs_name = match &args.overwrite_mount_point {
-    Some(_) => Some(&args.mount_point),
-    None => None
-  };
-  // use fs_name as the file if no file is specified
-  if fs_name.is_some() && args.file.is_empty() {
-    args.file.push(fs_name.unwrap().into());
-  }
+  let args = Args::parse();
   let mut options = vec![
     MountOption::RO,
-    MountOption::FSName(fs_name.map(|v| v.to_string_lossy().into()).unwrap_or("rangefs".into())),
+    MountOption::FSName(args.file.to_string_lossy().into()),
     MountOption::Subtype("rangefs".to_string()),
   ];
   if args.allow_other {
     options.push(MountOption::AllowOther);
   }
-  if args.allow_root {
+ if args.allow_root {
     options.push(MountOption::AllowRoot);
   }
   if args.auto_unmount {
     options.push(MountOption::AutoUnmount);
   }
+
+  let mut configs = args.config.iter().map(parse_config).collect::<Result<Vec<_>, _>>()?;
+
   if let Some(opt) = args.options {
     for o in opt.split(',').map(mount_option_from_str) {
       match o {
         MountOption::RW => (),
         MountOption::CUSTOM(x) => {
-          let parts: Vec<_> = x.split("=").collect();
-          match parts[0] {
-            "file" => args.file = parts[1].split(" ").map_into().collect(),
-            "name" => args.name = parts[1].split(" ").map_into().collect(),
-            "start" => args.start = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
-            "length" => args.length = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
-            "uid" => args.uid = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
-            "gid" => args.gid = parts[1].split(" ").map(str::parse).collect::<Result<_, _>>()?,
-            "timeout" => args.timeout = parts[1].parse()?,
-            "stdout" => args.stdout = Some(parts[1].into()),
-            "stderr" => args.stderr = Some(parts[1].into()),
-            _ => options.push(MountOption::CUSTOM(x))
-          };
+          if x.starts_with("config::") {
+            for c in x.split("::").skip(1).map(parse_config) {
+              configs.push(c?);
+            }
+          } else {
+            options.push(MountOption::CUSTOM(x));
+          }
         },
         x => {
           options.push(x);
@@ -173,27 +181,22 @@ fn main() -> Result<()> {
     }
   }
 
-  if args.file.is_empty() {
-    return Err(anyhow!("No source file specified"));
+  if configs.is_empty() {
+    return Err(anyhow!("no mapping config specified"));
   }
 
-  let mount_point = args.overwrite_mount_point.unwrap_or(args.mount_point);
-  if !mount_point.as_path().is_dir() {
-    return Err(anyhow!("Mount point doesn't exist or isn't a directory"));
+  if !args.mount_point.as_path().is_dir() {
+    return Err(anyhow!("mount point doesn't exist or isn't a directory"));
   }
 
   let mount_fs = || {
     fuser::mount2(
       RangeFs::new(
-        &args.file,
-        &args.name,
-        &args.start,
-        &args.length,
-        &args.uid,
-        &args.gid,
+        args.file,
+        configs,
         args.timeout
       ),
-      &mount_point,
+      &args.mount_point,
       &options
     )
   };

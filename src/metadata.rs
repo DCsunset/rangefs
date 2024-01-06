@@ -13,42 +13,41 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::{time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, ffi::OsString};
+use std::{time::{SystemTime, Duration}, fs, os::unix::prelude::MetadataExt, path::Path};
 
 use fuser::{FileAttr, FileType};
 use libc::{S_IXUSR, S_IXGRP, S_IXOTH, S_IFMT};
 use log::{warn, debug};
 
-/// Option to init or update InodeInfo
-pub struct InodeInfoOptions {
-  /// path of the source file
-  pub path: OsString,
-  pub ino: u64,
-  pub start: u64,
-  pub length: Option<u64>,
+/// Config for each mapped file
+pub struct InodeConfig {
+  pub name: Option<String>,
+  pub offset: Option<u64>,
+  pub size: Option<u64>,
   pub uid: Option<u32>,
-  pub gid: Option<u32>
+  pub gid: Option<u32>,
 }
 
 // InodeInfo corresponds to top level dirs
 pub struct InodeInfo {
+  pub ino: u64,
   // whether error encountered when reading source file metadata
   pub err: bool,
-  /// Actuall attr of the virtual file
+  /// Actual attr of the virtual file
   pub attr: FileAttr,
-  /// Options
-  pub options: InodeInfoOptions,
+  pub config: InodeConfig,
   /// Last update timestamp
   timestamp: SystemTime
 }
 
 impl InodeInfo {
-  pub fn new(options: InodeInfoOptions) -> Self {
-    let (attr, err) = InodeInfo::get_metadata(&options);
+  pub fn new(file: impl AsRef<Path>, ino: u64, config: InodeConfig) -> Self {
+    let (attr, err) = InodeInfo::get_metadata(file, ino, &config);
     Self {
+      ino,
       err,
       attr,
-      options,
+      config,
       timestamp: SystemTime::now()
     }
   }
@@ -67,10 +66,10 @@ impl InodeInfo {
     }
   }
 
-  pub fn update_info(&mut self, timeout: Duration) {
+  pub fn update_info(&mut self, file: impl AsRef<Path>, timeout: Duration) {
     if self.outdated(SystemTime::now(), timeout) {
-      debug!("updating inode info");
-      let (attr, err) = InodeInfo::get_metadata(&self.options);
+      debug!("Updating inode info");
+      let (attr, err) = InodeInfo::get_metadata(file, self.ino, &self.config);
       self.attr = attr;
       self.err = err;
       self.timestamp = SystemTime::now();
@@ -78,9 +77,9 @@ impl InodeInfo {
   }
 
   // Get and derive attr from metadata of existing file
-  pub fn get_metadata(options: &InodeInfoOptions) -> (FileAttr, bool) {
+  pub fn get_metadata(file: impl AsRef<Path>, ino: u64, config: &InodeConfig) -> (FileAttr, bool) {
     let cur_time = SystemTime::now();
-    match fs::metadata(&options.path) {
+    match fs::metadata(file) {
       Ok(src_metadata) => {
         // permission bits (excluding the format bits)
         let mut perm = src_metadata.mode() & !S_IFMT;
@@ -88,10 +87,10 @@ impl InodeInfo {
           // remove executable bit
           perm &= !(S_IXUSR | S_IXGRP | S_IXOTH);
         }
-        let size = options.length.unwrap_or(src_metadata.size().saturating_sub(options.start));
+        let size = config.size.unwrap_or(src_metadata.size().saturating_sub(config.offset.unwrap_or(0)));
 
         (FileAttr {
-          ino: options.ino,
+          ino,
           size,
           blocks: size.div_ceil(512),
           // Convert unix timestamp to SystemTime
@@ -102,19 +101,19 @@ impl InodeInfo {
           kind: FileType::RegularFile,
           perm: perm as u16,
           nlink: 1,
-          uid: options.uid.unwrap_or(src_metadata.uid()),
-          gid: options.gid.unwrap_or(src_metadata.gid()),
+          uid: config.uid.unwrap_or(src_metadata.uid()),
+          gid: config.gid.unwrap_or(src_metadata.gid()),
           rdev: 0,
           blksize: 512,
           flags: 0 // macOS only
         }, false)
       }
       Err(err) => {
-        warn!("error reading metadata from {:?}: {}", options.path, err);
-        let size = options.length.unwrap_or(0);
+        warn!("Error reading source file metadata: {}", err);
+        let size = config.size.unwrap_or(0);
         // dummy attr
         (FileAttr {
-          ino: options.ino,
+          ino,
           size: 0,
           blocks: size.div_ceil(512),
           // Convert unix timestamp to SystemTime
@@ -125,8 +124,8 @@ impl InodeInfo {
           kind: FileType::RegularFile,
           perm: 0o666,
           nlink: 1,
-          uid: options.uid.unwrap_or(0),
-          gid: options.gid.unwrap_or(0),
+          uid: config.uid.unwrap_or(0),
+          gid: config.gid.unwrap_or(0),
           rdev: 0,
           blksize: 512,
           flags: 0 // macOS only

@@ -28,12 +28,12 @@ use std::{
   collections::HashMap,
   path::{Path, PathBuf}, cmp
 };
-use log::{error, info};
-use crate::metadata::{InodeInfo, InodeInfoOptions};
+use log::{error, warn};
+use crate::metadata::{InodeInfo, InodeConfig};
 use libc::{EIO, ENOENT};
-use itertools::izip;
 
 pub struct RangeFs {
+  file: PathBuf,
   /// Timeout for cache in fuse reply (attr, entry)
   timeout: Duration,
   // Map file name to inode
@@ -42,10 +42,23 @@ pub struct RangeFs {
   inode_map: HashMap<u64, InodeInfo>
 }
 
-impl RangeFs {
-  pub fn new(files: &Vec<PathBuf>, names: &Vec<PathBuf>, starts: &Vec<u64>, lengths: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>, timeout_secs: u64) -> Self {
-    let (file_map, inode_map) = RangeFs::init_file_inode_map(files, names, starts, lengths, uids, gids);
+impl Default for InodeConfig {
+  fn default() -> Self {
     Self {
+      name: None,
+      offset: None,
+      size: None,
+      uid: None,
+      gid: None
+    }
+  }
+}
+
+impl RangeFs {
+  pub fn new(file: PathBuf, configs: Vec<InodeConfig>, timeout_secs: u64) -> Self {
+    let (file_map, inode_map) = RangeFs::init_file_inode_map(&file, configs);
+    Self {
+      file,
       timeout: Duration::from_secs(timeout_secs),
       file_map,
       inode_map
@@ -53,49 +66,26 @@ impl RangeFs {
   }
 
   /// Init file_map and inode_map
-  fn init_file_inode_map(paths: &Vec<PathBuf>, names: &Vec<PathBuf>, starts: &Vec<u64>, lengths: &Vec<u64>, uids: &Vec<u32>, gids: &Vec<u32>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
+  fn init_file_inode_map(file: impl AsRef<Path>, configs: Vec<InodeConfig>) -> (HashMap<OsString, u64>, HashMap<u64, InodeInfo>) {
     let mut file_map: HashMap<OsString, _> = HashMap::new();
     let mut inode_map = HashMap::new();
-    let max_len = vec![
-      paths.len(),
-      names.len(),
-      starts.len(),
-      lengths.len(),
-      uids.len(),
-      gids.len()
-    ].iter().max().unwrap().clone() as u64;
-    for (ino,  path, n, start, length, uid, gid) in izip!(
-      // ino start fro 2 as 1 is reserved for FUSE root directory
-      2..max_len+2,
-      paths.iter().chain(iter::repeat(paths.last().unwrap())),
-      names.iter().map(|n| Some(n)).chain(iter::repeat(None)),
-      // default offset is 0
-      starts.iter().cloned().chain(iter::repeat(0)),
-      lengths.iter().cloned().map(Some).chain(iter::repeat(None)),
-      uids.iter().cloned().map(Some).chain(iter::repeat(None)),
-      gids.iter().cloned().map(Some).chain(iter::repeat(None))
-    ) {
+
+    // ino start fro 2 as 1 is reserved for FUSE root directory
+    for (ino, config) in iter::zip(2.., configs) {
       // use original device name as default name if not specified
       // let name = n.unwrap_or(path).as_os_str().to_os_string();
-      let name: OsString = match n {
+      let name: OsString = match &config.name {
         Some(name) => name.into(),
         None => {
-          path.as_path().file_name()
-            .expect(&format!("invalid source file: {:?}", path))
+          file.as_ref().file_name()
+            .expect(&format!("invalid source file: {:?}", file.as_ref()))
             .into()
         }
       };
       match file_map.get(&name) {
-        Some(_) => info!("duplicate source paths"),
+        Some(_) => warn!("Ignoring config with duplicate name: {:?}", name),
         None => {
-          let info = InodeInfo::new(InodeInfoOptions {
-            path: path.into(),
-            ino,
-            start,
-            length,
-            uid,
-            gid
-          });
+          let info = InodeInfo::new(&file, ino, config);
           inode_map.insert(ino, info);
           file_map.insert(name, ino);
         }
@@ -116,7 +106,7 @@ impl Filesystem for RangeFs {
     match self.file_map.get(name) {
       Some(ino) => {
         let info = self.inode_map.get_mut(ino).expect(&format!("invalid ino: {}", ino));
-        info.update_info(self.timeout);
+        info.update_info(&self.file, self.timeout);
         reply.entry(&self.timeout, &info.attr, 0);
       },
       None => {
@@ -147,7 +137,7 @@ impl Filesystem for RangeFs {
       });
     } else {
       if let Some(info) = self.inode_map.get_mut(&ino) {
-        info.update_info(self.timeout);
+        info.update_info(&self.file, self.timeout);
         if info.err {
           reply.error(EIO);
           return;
@@ -196,7 +186,7 @@ impl Filesystem for RangeFs {
   fn open(&mut self, _req: &Request, ino: u64, _flags: i32, reply: fuser::ReplyOpen) {
     match self.inode_map.get_mut(&ino) {
       Some(info) => {
-        info.update_info(self.timeout);
+        info.update_info(&self.file, self.timeout);
         if info.err {
           reply.error(EIO);
           return;
@@ -226,14 +216,14 @@ impl Filesystem for RangeFs {
           reply.error(EIO);
           return;
         }
-        let o = info.options.start + offset as u64;
+        let o = info.config.offset.unwrap_or(0) + offset as u64;
         let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
-        match read_at(&info.options.path, o, s as usize) {
+        match read_at(&self.file, o, s as usize) {
           Ok(data) => {
             reply.data(&data);
           },
           Err(err) => {
-            error!("error reading file {:?}: {}", info.options.path, err);
+            error!("Error reading file {:?}: {}", self.file, err);
             reply.error(EIO);
           }
         }
