@@ -64,7 +64,7 @@ AGPL-3.0. Copyright notice:
 
 ```
 rangefs
-Copyright (C) 2023  DCsunset
+Copyright (C) 2023-2024  DCsunset
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
