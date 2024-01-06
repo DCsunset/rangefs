@@ -29,10 +29,6 @@ use daemonize::Daemonize;
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-  /// custom name for mounted file
-  #[arg(short, long)]
-  name: Vec<PathBuf>,
-
   /// Config string for each mapped file with colon-separated options
   /// Supported options:
   /// - offset=<offset> (default: 0)
@@ -42,6 +38,26 @@ struct Args {
   /// - gid=<gid> (default: source_gid)
   #[arg(short, long, verbatim_doc_comment)]
   config: Vec<String>,
+
+  /// Timeout for metadata and cache in seconds
+  #[arg(short, long, default_value_t = 1)]
+  timeout: u64,
+
+  /// Redirect stdout to file (only when in background)
+  #[arg(long)]
+  stdout: Option<PathBuf>,
+
+  /// Redirect stderr to file (only when in background)
+  #[arg(long)]
+  stderr: Option<PathBuf>,
+
+  /// Run in foreground
+  #[arg(long)]
+  foreground: bool,
+
+  /// comma-separated mount options for compatibility with mount.fuse and fstab
+  #[arg(short)]
+  options: Option<String>,
 
   /// allow other users to access the mounted fs
   #[arg(long)]
@@ -55,26 +71,6 @@ struct Args {
   /// (need --allow-root or --allow-other; auto set one if not specified)
   #[arg(short, long)]
   auto_unmount: bool,
-
-  /// Timeout for metadata and cache in seconds
-  #[arg(short, long, default_value_t = 1)]
-  timeout: u64,
-
-  /// Run in foreground
-  #[arg(long)]
-  foreground: bool,
-
-  /// Redirect stdout to file (only when in background)
-  #[arg(long)]
-  stdout: Option<PathBuf>,
-
-  /// Redirect stderr to file (only when in background)
-  #[arg(long)]
-  stderr: Option<PathBuf>,
-
-  /// comma-separated mount options for compatibility with mount.fuse and fstab
-  #[arg(short)]
-  options: Option<String>,
 
   /// source file to map ranges from
   file: PathBuf,
@@ -161,6 +157,8 @@ fn main() -> Result<()> {
 
   let mut timeout = args.timeout;
   let mut configs = args.config.iter().map(parse_config).collect::<Result<Vec<_>, _>>()?;
+  let mut stdout = args.stdout;
+  let mut stderr = args.stderr;
 
   if let Some(opt) = args.options {
     for o in opt.split(',').map(mount_option_from_str) {
@@ -168,13 +166,19 @@ fn main() -> Result<()> {
         MountOption::RW => (),
         MountOption::CUSTOM(x) => {
           match x {
-            x if x.starts_with("timeout::") => {
-              timeout = x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.parse()?;
-            },
             x if x.starts_with("config::") => {
               for c in x.split("::").skip(1).map(parse_config) {
                 configs.push(c?);
               }
+            },
+            x if x.starts_with("timeout::") => {
+              timeout = x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.parse()?;
+            },
+            x if x.starts_with("stdout::") => {
+              stdout = Some(x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.into());
+            },
+            x if x.starts_with("stderr::") => {
+              stderr = Some(x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.into());
             },
             _ => options.push(MountOption::CUSTOM(x))
           };
@@ -210,10 +214,10 @@ fn main() -> Result<()> {
     mount_fs()?;
   } else {
     let mut daemon = Daemonize::new().working_directory(".");
-    if let Some(stdout) = args.stdout {
+    if let Some(stdout) = stdout {
       daemon = daemon.stdout(std::fs::File::create(stdout)?);
     }
-    if let Some(stderr) = args.stderr {
+    if let Some(stderr) = stderr {
       daemon = daemon.stderr(std::fs::File::create(stderr)?);
     }
 
