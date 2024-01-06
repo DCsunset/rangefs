@@ -35,12 +35,12 @@ struct Args {
 
   /// Config string for each mapped file with colon-separated options
   /// Supported options:
-  /// - offset=<offset> (default to 0)
-  /// - size=<size> (default range to end of file)
-  /// - name=<mapped_filename> (default to the source filename)
-  /// - uid=<uid> (default to source uid)
-  /// - gid=<gid> (default to source gid)
-  #[arg(short, long)]
+  /// - offset=<offset> (default: 0)
+  /// - size=<size> (default: file_size - offset)
+  /// - name=<mapped_filename> (default: source_filename)
+  /// - uid=<uid> (default: source_uid)
+  /// - gid=<gid> (default: source_gid)
+  #[arg(short, long, verbatim_doc_comment)]
   config: Vec<String>,
 
   /// allow other users to access the mounted fs
@@ -72,7 +72,7 @@ struct Args {
   #[arg(long)]
   stderr: Option<PathBuf>,
 
-  /// comma-separated mount options for compatibility with mount.fuse
+  /// comma-separated mount options for compatibility with mount.fuse and fstab
   #[arg(short)]
   options: Option<String>,
 
@@ -159,6 +159,7 @@ fn main() -> Result<()> {
     options.push(MountOption::AutoUnmount);
   }
 
+  let mut timeout = args.timeout;
   let mut configs = args.config.iter().map(parse_config).collect::<Result<Vec<_>, _>>()?;
 
   if let Some(opt) = args.options {
@@ -166,13 +167,17 @@ fn main() -> Result<()> {
       match o {
         MountOption::RW => (),
         MountOption::CUSTOM(x) => {
-          if x.starts_with("config::") {
-            for c in x.split("::").skip(1).map(parse_config) {
-              configs.push(c?);
-            }
-          } else {
-            options.push(MountOption::CUSTOM(x));
-          }
+          match x {
+            x if x.starts_with("timeout::") => {
+              timeout = x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.parse()?;
+            },
+            x if x.starts_with("config::") => {
+              for c in x.split("::").skip(1).map(parse_config) {
+                configs.push(c?);
+              }
+            },
+            _ => options.push(MountOption::CUSTOM(x))
+          };
         },
         x => {
           options.push(x);
@@ -194,7 +199,7 @@ fn main() -> Result<()> {
       RangeFs::new(
         args.file,
         configs,
-        args.timeout
+        timeout
       ),
       &args.mount_point,
       &options
