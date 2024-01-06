@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.0](https://github.com/DCsunset/rangefs/compare/v0.3.1...v0.4.0) (2024-01-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* use new config format to support default values and fstab mount
+* accept space separated values in -o option to make it compatible with mount
+
+### Features
+
+* accept space separated values in -o option to make it compatible with mount ([f85394c](https://github.com/DCsunset/rangefs/commit/f85394c441564d51c3ff949cfa945aea800509d7))
+* use fs_name as default file and reuse last file when necessary ([bef0c25](https://github.com/DCsunset/rangefs/commit/bef0c25e697b22c2c40ece14cc5dfa4ecc873dac))
+* use new config format to support default values and fstab mount ([1c74905](https://github.com/DCsunset/rangefs/commit/1c749056c64bee7947f3647e6136d86e198035c7))
+
+
+### Bug Fixes
+
+* accept timeout in -o and update docs ([f61f566](https://github.com/DCsunset/rangefs/commit/f61f5666c44bd880ba0d125f5e49ae6d36c0c3f4))
+* improve error handling ([7de013c](https://github.com/DCsunset/rangefs/commit/7de013c4af699523bed1b184d51aa7bdc915f9c6))
+* use overwritten mount_point as fsname (following fstab convention) ([e300c33](https://github.com/DCsunset/rangefs/commit/e300c33e459efbe71c295eed1d68ee08912550d4))
+
 ## [0.3.1](https://github.com/DCsunset/rangefs/compare/v0.3.0...v0.3.1) (2023-12-26)
 
 
