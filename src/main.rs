@@ -72,8 +72,12 @@ struct Args {
   #[arg(short, long)]
   auto_unmount: bool,
 
+  /// Overwrite source file (useful for customizing fsname)
+  #[arg(short, long)]
+  file: Option<PathBuf>,
+
   /// source file to map ranges from
-  file: PathBuf,
+  source_file: PathBuf,
 
   /// mount point
   mount_point: PathBuf
@@ -142,7 +146,7 @@ fn main() -> Result<()> {
   let args = Args::parse();
   let mut options = vec![
     MountOption::RO,
-    MountOption::FSName(args.file.to_string_lossy().into()),
+    MountOption::FSName(args.source_file.to_string_lossy().into()),
     MountOption::Subtype("rangefs".to_string()),
   ];
   if args.allow_other {
@@ -201,7 +205,7 @@ fn main() -> Result<()> {
   let mount_fs = || {
     fuser::mount2(
       RangeFs::new(
-        args.file,
+        args.file.unwrap_or(args.source_file),
         configs,
         timeout
       ),
