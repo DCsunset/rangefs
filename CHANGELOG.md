@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.3](https://github.com/DCsunset/rangefs/compare/v0.4.2...v0.4.3) (2024-01-08)
+
+
+### Bug Fixes
+
+* support file option in -o ([68f66a4](https://github.com/DCsunset/rangefs/commit/68f66a41a600f3463a890abbed0d5d0bf9af7669))
+
 ## [0.4.2](https://github.com/DCsunset/rangefs/compare/v0.4.1...v0.4.2) (2024-01-08)
 
 
