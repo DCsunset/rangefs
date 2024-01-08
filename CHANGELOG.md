@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.4.2](https://github.com/DCsunset/rangefs/compare/v0.4.1...v0.4.2) (2024-01-08)
+
+
+### Features
+
+* add file option to allow customizing fsname ([d3e2766](https://github.com/DCsunset/rangefs/commit/d3e2766666d50eee53cc82d5f52ed7aab105b6e2))
+
 ## [0.4.1](https://github.com/DCsunset/rangefs/compare/v0.4.0...v0.4.1) (2024-01-06)
 
 
