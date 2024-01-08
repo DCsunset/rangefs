@@ -77,7 +77,7 @@ struct Args {
   file: Option<PathBuf>,
 
   /// source file to map ranges from
-  source_file: PathBuf,
+  source: PathBuf,
 
   /// mount point
   mount_point: PathBuf
@@ -146,7 +146,7 @@ fn main() -> Result<()> {
   let args = Args::parse();
   let mut options = vec![
     MountOption::RO,
-    MountOption::FSName(args.source_file.to_string_lossy().into()),
+    MountOption::FSName(args.source.to_string_lossy().into()),
     MountOption::Subtype("rangefs".to_string()),
   ];
   if args.allow_other {
@@ -159,6 +159,7 @@ fn main() -> Result<()> {
     options.push(MountOption::AutoUnmount);
   }
 
+  let mut file = args.file;
   let mut timeout = args.timeout;
   let mut configs = args.config.iter().map(parse_config).collect::<Result<Vec<_>, _>>()?;
   let mut stdout = args.stdout;
@@ -174,6 +175,9 @@ fn main() -> Result<()> {
               for c in x.split("::").skip(1).map(parse_config) {
                 configs.push(c?);
               }
+            },
+            x if x.starts_with("file::") => {
+              file = Some(x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.into());
             },
             x if x.starts_with("timeout::") => {
               timeout = x.split("::").skip(1).next().ok_or(anyhow!("invalid option: {}", x))?.parse()?;
@@ -205,7 +209,7 @@ fn main() -> Result<()> {
   let mount_fs = || {
     fuser::mount2(
       RangeFs::new(
-        args.file.unwrap_or(args.source_file),
+        file.unwrap_or(args.source),
         configs,
         timeout
       ),
