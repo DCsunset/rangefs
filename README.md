@@ -15,6 +15,25 @@ cargo install rangefs
 ```
 
 If you are using Nix, you can also install it from NUR package `nur.repos.dcsunset.rangefs`.
+The NUR repo also provides a NixOS module:
+``` nix
+programs.rangefs = {
+  enable = true;
+  fileSystems = {
+    "/mntpoint" = {
+      source = "/src";
+      config = [
+        {
+          name = "dest";
+          offset = 32;
+          size = 64;
+        }
+      ];
+      extraOptions = [ "allow_other" ];
+    };
+  };
+};
+```
 
 ## Usage
 
@@ -33,23 +52,23 @@ fusermount -u <mount_point>
 RANGEFS_LOG=debug rangefs -c offset=1:size=1 --foreground <file> <mount_point>
 ```
 
-The mount point will be a read-only filesystem containing files that correponding to the specified ranges in the source file.
+The mount point will be a read-only filesystem containing files that corresponding to the specified ranges in the source file.
 Repeat the `--config` option to mount multiple ranges.
 
 Note that the program will run in the background by default.
 Use flag `--foreground` to run it in the foreground.
 
 If the program exits without using `fusermount`,
-`fusermoutn` still needs to be used even after the program exits.
+`fusermount` still needs to be used even after the program exits.
 You can also use `-a` option to auto unmount the fs upon program exit.
 
 Note that rangefs also supports block special file.
-However, you need to speicify the length of the range.
+However, you need to specify the length of the range.
 Otherwise, the default length will be 0 (same as the size in the block file metadata).
 
 Rangefs also supports mounting through `mount.fuse` or `/etc/fstab`.
 To specify configs, start with `config::` and separate configs by double colons.
-For timeout, stdout and stderr, speicify `<option>::<value>` to set it.
+For timeout, stdout and stderr, specify `<option>::<value>` to set it.
 `::` is used instead of `=` to distinguish custom options from existing mount options.
 An example fstab config:
 ```
