@@ -163,16 +163,11 @@ impl Filesystem for RangeFs {
     }
     assert!(offset >= 0);
 
-    // special entries
-    let mut entries = vec![
-      (FUSE_ROOT_ID, FileType::Directory, OsString::from(".")),
-      (FUSE_ROOT_ID, FileType::Directory, OsString::from("..")),
-    ];
-    entries.extend(self.file_map.iter().map(|(name, ino)| {
+    let entries = self.file_map.iter().map(|(name, ino)| {
       (ino.clone(), FileType::RegularFile, name.to_os_string())
-    }));
+    });
 
-    for (i, e) in entries.iter().enumerate().skip(offset as usize) {
+    for (i, e) in entries.enumerate().skip(offset as usize) {
       // offset is used by kernel for future readdir calls (should be next entry)
       if reply.add(e.0, (i+1) as i64, e.1, &e.2) {
         // return true when buffer full
