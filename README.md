@@ -40,7 +40,7 @@ programs.rangefs = {
 To mount files with range to a mount point:
 
 ```sh
-# mount a range as a new file
+# mount a range as a virtual file
 rangefs --config offset=16:size=16 <file> <mount_point>
 # multiple ranges with different names
 rangefs -c offset=4:name=range1 -c offset=8:size=8:name=range2 <file> <mount_point>
@@ -72,10 +72,22 @@ For timeout, stdout and stderr, specify `<option>::<value>` to set it.
 `::` is used instead of `=` to distinguish custom options from existing mount options.
 An example fstab config:
 ```
-/source_file /mount_point fuse./path/to/rangefs nofail,allow_other,config::name=r1:offset=1::name=r2:offset=2:size=2 0 0
+/source_file /mount_point fuse./path/to/rangefs nofail,allow_other,config::name=r1:offset=1::name=r2:offset=2:size=2:preload 0 0
 ```
 
 See available options using `rangefs --help`.
+
+
+## Config options
+
+The following options are supported in the `--config` option:
+- `offset=<offset>`: starts from offset of source file (default: 0)
+- `size=<size>`: size of the virtual file (default: actual_file_size - offset)
+- `name=<mapped_filename>`: name of the virtual file (default: source_filename)
+- `uid=<uid>`: uid of the virtual file (default: source_uid)
+- `gid=<gid>`: uid of the virtual file (default: source_gid)
+- `preload`: preload data from source file and all future reads occur in memory
+
 
 ## License
 
