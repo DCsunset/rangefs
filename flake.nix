@@ -19,6 +19,23 @@
             ];
           };
         };
+
+        apps = {
+          release = {
+            type = "app";
+            program = pkgs.writeShellScriptBin "release" ''
+              set -e
+
+              ver=''${1:-$(git cliff --bumped-version)}
+
+              sed -i "/name = \"rangefs\"/{n;s/version = \".*\"/version = \"$ver\"/g}" Cargo.toml Cargo.lock
+              git cliff --bump -o CHANGELOG.md
+              git add -A
+              git commit -m "chore(release): $ver"
+              git tag "$ver"
+            '';
+          };
+        };
       };
     };
 }
