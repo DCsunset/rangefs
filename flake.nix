@@ -27,12 +27,13 @@
               set -e
 
               ver=''${1:-$(git cliff --bumped-version)}
+              ver=''${ver##v}
 
               sed -i "/name = \"rangefs\"/{n;s/version = \".*\"/version = \"$ver\"/g}" Cargo.toml Cargo.lock
               git cliff --bump -o CHANGELOG.md
               git add -A
-              git commit -m "chore(release): $ver"
-              git tag "$ver"
+              git commit -m "chore(release): v$ver"
+              git tag "v$ver"
             '';
           };
         };
