@@ -36,10 +36,10 @@ pub struct RangeFs {
   file: PathBuf,
   /// Timeout for cache in fuse reply (attr, entry)
   timeout: Duration,
-  // Map file name to inode
+  /// Map file name to inode
   file_map: HashMap<OsString, u64>,
   /// map inode to actual filename and metadata
-  inode_map: HashMap<u64, InodeInfo>
+  inode_map: HashMap<u64, InodeInfo>,
 }
 
 impl Default for InodeConfig {
@@ -49,7 +49,8 @@ impl Default for InodeConfig {
       offset: None,
       size: None,
       uid: None,
-      gid: None
+      gid: None,
+      preload: false,
     }
   }
 }
@@ -85,7 +86,16 @@ impl RangeFs {
       match file_map.get(&name) {
         Some(_) => warn!("Ignoring config with duplicate name: {:?}", name),
         None => {
-          let info = InodeInfo::new(&file, ino, config);
+          let preload = config.preload;
+          let mut info = InodeInfo::new(&file, ino, config);
+          if preload {
+            let data = Self::read_file(&file, &info, 0, info.attr.size);
+            // error preloading
+            if data.is_none() {
+              continue;
+            }
+            info.data = data
+          }
           inode_map.insert(ino, info);
           file_map.insert(name, ino);
         }
@@ -93,6 +103,23 @@ impl RangeFs {
     }
     (file_map, inode_map)
   }
+
+  /// Read a virtual file data
+  fn read_file(file: impl AsRef<Path>, info: &InodeInfo, offset: u64, size: u64) -> Option<Vec<u8>> {
+    if info.err {
+      return None;
+    }
+    let o = info.config.offset.unwrap_or(0) + offset as u64;
+    let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
+    match read_at(&file, o, s as usize) {
+      Ok(data) => Some(data),
+      Err(err) => {
+        error!("Error reading file {:?}: {}", file.as_ref(), err);
+        None
+      }
+    }
+  }
+
 }
 
 
@@ -211,16 +238,16 @@ impl Filesystem for RangeFs {
           reply.error(EIO);
           return;
         }
-        let o = info.config.offset.unwrap_or(0) + offset as u64;
-        let s = cmp::min(info.attr.size.saturating_sub(offset as u64), size as u64);
-        match read_at(&self.file, o, s as usize) {
-          Ok(data) => {
-            reply.data(&data);
-          },
-          Err(err) => {
-            error!("Error reading file {:?}: {}", self.file, err);
-            reply.error(EIO);
-          }
+        if let Some(data) = &info.data {
+          let s = cmp::min(offset as usize, data.len());
+          let e = cmp::min(s + size as usize, data.len());
+          reply.data(&data[s..e]);
+          return;
+        }
+
+        match Self::read_file(&self.file, info, offset as u64, size as u64) {
+          Some(data) => reply.data(&data),
+          None => reply.error(EIO),
         }
       },
       None => reply.error(ENOENT)

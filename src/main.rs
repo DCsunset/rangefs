@@ -32,10 +32,11 @@ struct Args {
   /// Config string for each mapped file with colon-separated options
   /// Supported options:
   /// - offset=<offset> (default: 0)
-  /// - size=<size> (default: file_size - offset)
+  /// - size=<size> (default: source_file_size - offset)
   /// - name=<mapped_filename> (default: source_filename)
   /// - uid=<uid> (default: source_uid)
   /// - gid=<gid> (default: source_gid)
+  /// - preload (default: false)
   #[arg(short, long, verbatim_doc_comment)]
   config: Vec<String>,
 
@@ -124,13 +125,14 @@ pub fn parse_config(config_str: impl AsRef<str>) -> Result<InodeConfig> {
   }
   for opt_str in config_str.as_ref().split(":") {
     let parts: Vec<_> = opt_str.split("=").collect();
-    assert_opt(parts.len() == 2, opt_str)?;
+    assert_opt(parts.len() >= 1 && parts.len() <= 2, opt_str)?;
     match parts[0] {
       "name" => config.name = Some(parts[1].into()),
       "offset" => config.offset = Some(parts[1].parse()?),
       "size" => config.size = Some(parts[1].parse()?),
       "uid" => config.uid = Some(parts[1].parse()?),
       "gid" => config.gid = Some(parts[1].parse()?),
+      "preload" => config.preload = true,
       _ => assert_opt(false, opt_str)?
     };
   }

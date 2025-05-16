@@ -26,6 +26,7 @@ pub struct InodeConfig {
   pub size: Option<u64>,
   pub uid: Option<u32>,
   pub gid: Option<u32>,
+  pub preload: bool,
 }
 
 // InodeInfo corresponds to top level dirs
@@ -37,7 +38,9 @@ pub struct InodeInfo {
   pub attr: FileAttr,
   pub config: InodeConfig,
   /// Last update timestamp
-  timestamp: SystemTime
+  timestamp: SystemTime,
+  /// Preloaded data
+  pub data: Option<Vec<u8>>,
 }
 
 impl InodeInfo {
@@ -48,7 +51,8 @@ impl InodeInfo {
       err,
       attr,
       config,
-      timestamp: SystemTime::now()
+      timestamp: SystemTime::now(),
+      data: None,
     }
   }
 
@@ -67,7 +71,7 @@ impl InodeInfo {
   }
 
   pub fn update_info(&mut self, file: impl AsRef<Path>, timeout: Duration) {
-    if self.outdated(SystemTime::now(), timeout) {
+    if self.outdated(SystemTime::now(), timeout) && self.data.is_none() {
       debug!("Updating inode info");
       let (attr, err) = InodeInfo::get_metadata(file, self.ino, &self.config);
       self.attr = attr;
