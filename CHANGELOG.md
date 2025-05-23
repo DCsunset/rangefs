@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2025-05-23
+
+### 🐛 Bug Fixes
+
+- Wait for mount to finish in background mode and improve error handling
+
+### ⚙️ Miscellaneous Tasks
+
+- Update action package
+- Fix download artifcat version
+
 ## [0.5.0] - 2025-05-16
 
 ### 🚀 Features
@@ -17,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Update flake inputs
 - Use git cliff for changelog
 - Fix version bumping
+- *(release)* V0.5.0
 
 ## [0.4.4] - 2024-06-26
 
