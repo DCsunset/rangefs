@@ -13,18 +13,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-extern crate env_logger;
-
 mod rangefs;
 mod metadata;
 
-use std::path::PathBuf;
-use anyhow::{Result, anyhow};
+use std::{fs, path::PathBuf};
+use anyhow::anyhow;
 use clap::Parser;
 use fuser::{self, MountOption};
 use rangefs::RangeFs;
 use metadata::InodeConfig;
-use daemonize::Daemonize;
+use ipc_channel::ipc;
+use nix::unistd::{dup2_stderr, dup2_stdout, fork, ForkResult};
 
 #[derive(Parser)]
 #[command(version)]
@@ -109,8 +108,8 @@ pub fn mount_option_from_str(s: &str) -> MountOption {
   }
 }
 
-pub fn parse_config(config_str: impl AsRef<str>) -> Result<InodeConfig> {
-  let assert_opt = |cond: bool, opt_str| -> Result<()> {
+pub fn parse_config(config_str: impl AsRef<str>) -> anyhow::Result<InodeConfig> {
+  let assert_opt = |cond: bool, opt_str| -> anyhow::Result<()> {
     if !cond {
       Err(anyhow!("invalid option: {}", opt_str))
     } else {
@@ -139,7 +138,7 @@ pub fn parse_config(config_str: impl AsRef<str>) -> Result<InodeConfig> {
   Ok(config)
 }
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
   let env = env_logger::Env::default()
     .filter_or("RANGEFS_LOG", "warn")
     .write_style("RANGEFS_LOG_STYLE");
@@ -208,12 +207,13 @@ fn main() -> Result<()> {
     return Err(anyhow!("mount point doesn't exist or isn't a directory"));
   }
 
-  let mount_fs = || {
+  let mount_fs = |tx| {
     fuser::mount2(
       RangeFs::new(
         file.unwrap_or(args.source),
         configs,
-        timeout
+        timeout,
+        tx,
       ),
       &args.mount_point,
       &options
@@ -221,20 +221,37 @@ fn main() -> Result<()> {
   };
 
   if args.foreground {
-    mount_fs()?;
+    mount_fs(None)?;
   } else {
-    let mut daemon = Daemonize::new().working_directory(".");
-    if let Some(stdout) = stdout {
-      daemon = daemon.stdout(std::fs::File::create(stdout)?);
-    }
-    if let Some(stderr) = stderr {
-      daemon = daemon.stderr(std::fs::File::create(stderr)?);
-    }
+    let (tx, rx) = ipc::channel::<Option<String>>()?;
 
-    match daemon.start() {
-      Ok(_) => mount_fs()?,
-      Err(e) => return Err(anyhow!("error creating daemon: {}", e))
-    };
+    match unsafe { fork()? } {
+      ForkResult::Parent { .. } => {
+        // Wait until mounted
+        if let Some(msg) = rx.recv()? {
+          // Error msg
+          return Err(anyhow!(msg));
+        }
+      },
+      ForkResult::Child => {
+        let exec = || -> anyhow::Result<()> {
+          if let Some(stdout) = stdout {
+            dup2_stdout(fs::File::create(stdout)?)?;
+          }
+          if let Some(stderr) = stderr {
+            dup2_stderr(fs::File::create(stderr)?)?;
+          }
+          mount_fs(Some(tx.clone()))?;
+
+          Ok(())
+        };
+
+        if let Err(e) = exec() {
+          // Must send msg to unblock parent
+          tx.send(Some(e.to_string()))?;
+        }
+      }
+    }
   }
 
   Ok(())

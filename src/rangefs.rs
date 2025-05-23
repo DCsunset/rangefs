@@ -31,6 +31,7 @@ use std::{
 use log::{error, warn};
 use crate::metadata::{InodeInfo, InodeConfig};
 use libc::{EIO, ENOENT};
+use ipc_channel::ipc;
 
 pub struct RangeFs {
   file: PathBuf,
@@ -40,6 +41,8 @@ pub struct RangeFs {
   file_map: HashMap<OsString, u64>,
   /// map inode to actual filename and metadata
   inode_map: HashMap<u64, InodeInfo>,
+  /// Channel sender to send signal on init
+  init_tx: Option<ipc::IpcSender<Option<String>>>,
 }
 
 impl Default for InodeConfig {
@@ -56,13 +59,14 @@ impl Default for InodeConfig {
 }
 
 impl RangeFs {
-  pub fn new(file: PathBuf, configs: Vec<InodeConfig>, timeout_secs: u64) -> Self {
+  pub fn new(file: PathBuf, configs: Vec<InodeConfig>, timeout_secs: u64, init_tx: Option<ipc::IpcSender<Option<String>>>) -> Self {
     let (file_map, inode_map) = RangeFs::init_file_inode_map(&file, configs);
     Self {
       file,
       timeout: Duration::from_secs(timeout_secs),
       file_map,
-      inode_map
+      inode_map,
+      init_tx,
     }
   }
 
@@ -124,6 +128,14 @@ impl RangeFs {
 
 
 impl Filesystem for RangeFs {
+  // Invoked after file system is mounted
+  fn init(&mut self, _req: &Request<'_>, _config: &mut fuser::KernelConfig) -> Result<(), libc::c_int> {
+    if let Some(tx) = &self.init_tx {
+      tx.send(None).unwrap()
+    }
+    Ok(())
+  }
+
   fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: fuser::ReplyEntry) {
     // Only one root directory
     if parent != FUSE_ROOT_ID {
